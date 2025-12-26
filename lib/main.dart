@@ -4,6 +4,7 @@ import 'database/habit_database.dart';
 import 'package:animate_do/animate_do.dart'; 
 import 'package:confetti/confetti.dart';     
 import 'dart:math';
+import 'shop_page.dart'; // Pour qu'il connaisse la boutique
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +28,58 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.deepPurple, useMaterial3: true),
-      home: const HabitPage(),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const MainScreen(), // <--- CHANGEMENT ICI
+    );
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0; // Page actuelle (0 = Habitudes, 1 = Boutique)
+
+  // La liste des pages
+  final List<Widget> _pages = [
+    const HabitPage(), // Ta page existante
+    const ShopPage(),  // La nouvelle page
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      // On affiche la page qui correspond à l'index actuel
+      body: _pages[_currentIndex],
+      
+      // La barre de navigation en bas
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (int index) {
+          setState(() {
+            _currentIndex = index; // Change la page
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.check_circle_outline),
+            selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
+            label: 'Habitudes',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
+            label: 'Boutique',
+          ),
+        ],
+      ),
     );
   }
 }

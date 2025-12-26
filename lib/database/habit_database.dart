@@ -94,4 +94,17 @@ class HabitDatabase extends ChangeNotifier {
     habit.delete();
     loadHabits();
   }
+
+  // NOUVEAU : Fonction pour acheter un objet
+  // Renvoie 'true' si l'achat a réussi, 'false' sinon (pas assez d'argent)
+  bool buyItem(int price) {
+    if (userScore >= price) {
+      userScore -= price; // On déduit le prix
+      updateScore(0); // Astuce pour sauvegarder le nouveau score (0 ne change rien mais déclenche la save)
+      notifyListeners(); // On met à jour l'affichage
+      return true; // Succès !
+    } else {
+      return false; // Échec (Pauvre...)
+    }
+  }
 }
