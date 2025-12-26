@@ -129,4 +129,18 @@ class HabitDatabase extends ChangeNotifier {
     box.put('inventory', inventory);
     box.put('itemActive', itemActive);
   }
+
+  // NOUVEAU : Fonction pour modifier une habitude existante
+  void updateHabit(String id, String newTitle, List<int> newDays) {
+    // On cherche l'habitude dans la liste par son ID
+    final habitIndex = habits.indexWhere((h) => h.id == id);
+    
+    if (habitIndex != -1) {
+      final habit = habits[habitIndex];
+      habit.title = newTitle;
+      habit.activeDays = newDays;
+      habit.save(); // Sauvegarde dans Hive
+      loadHabits(); // Rafraîchit l'affichage (important si on change les jours)
+    }
+  }
 }

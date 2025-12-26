@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:animate_do/animate_do.dart'; // Pour les animations d'entrée
+import 'package:confetti/confetti.dart';     // Pour la fête !
+import 'dart:math';                          // Pour pi
+
+// Nos fichiers à nous
 import 'database/habit_database.dart';
-import 'package:animate_do/animate_do.dart'; 
-import 'package:confetti/confetti.dart';     
-import 'dart:math';
-import 'shop_page.dart'; // Pour qu'il connaisse la boutique
-import 'inventory_page.dart';
+import 'models/habit.dart';
+import 'shop_page.dart';      // Page Boutique
+import 'inventory_page.dart'; // Page Inventaire
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // On instancie la BDD
+  // 1. Initialisation de la Base de Données
   final habitDb = HabitDatabase();
   await habitDb.init();
 
@@ -29,15 +32,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'Habit Pet RPG',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        fontFamily: 'Round', // Si tu as une police custom, sinon retire cette ligne
       ),
-      home: const MainScreen(), // <--- CHANGEMENT ICI
+      home: const MainScreen(), // On démarre sur l'écran principal avec la navigation
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// ECRAN PRINCIPAL (Contient la barre de navigation en bas)
+// ---------------------------------------------------------------------------
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -46,52 +54,51 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0; // Page actuelle (0 = Habitudes, 1 = Boutique)
+  int _currentIndex = 0;
 
-  // La liste des pages
+  // La liste de nos 3 pages
   final List<Widget> _pages = [
-  const HabitPage(),
-  const InventoryPage(), // NOUVELLE PAGE (Index 1)
-  const ShopPage(),      // La boutique passe en Index 2
-];
+    const HabitPage(),      // Index 0
+    const InventoryPage(),  // Index 1
+    const ShopPage(),       // Index 2
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // On affiche la page qui correspond à l'index actuel
       body: _pages[_currentIndex],
-      
-      // La barre de navigation en bas
       bottomNavigationBar: NavigationBar(
-  selectedIndex: _currentIndex,
-  onDestinationSelected: (int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  },
-  destinations: const [
-    NavigationDestination(
-      icon: Icon(Icons.check_circle_outline),
-      selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
-      label: 'Quêtes',
-    ),
-    // NOUVEL ONGLET
-    NavigationDestination(
-      icon: Icon(Icons.backpack_outlined),
-      selectedIcon: Icon(Icons.backpack, color: Colors.deepPurple),
-      label: 'Sac',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.storefront_outlined),
-      selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
-      label: 'Boutique',
-    ),
-  ],
-),
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (int index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.check_circle_outline),
+            selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
+            label: 'Quêtes',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.backpack_outlined),
+            selectedIcon: Icon(Icons.backpack, color: Colors.deepPurple),
+            label: 'Sac',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.storefront_outlined),
+            selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
+            label: 'Boutique',
+          ),
+        ],
+      ),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// PAGE DES HABITUDES (La page principale du jeu)
+// ---------------------------------------------------------------------------
 class HabitPage extends StatefulWidget {
   const HabitPage({super.key});
 
@@ -105,7 +112,6 @@ class _HabitPageState extends State<HabitPage> {
   @override
   void initState() {
     super.initState();
-    // On initialise le canon à confettis (durée 1 seconde)
     _confettiController = ConfettiController(duration: const Duration(seconds: 1));
   }
 
@@ -115,26 +121,29 @@ class _HabitPageState extends State<HabitPage> {
     super.dispose();
   }
 
-  void _createNewHabit(BuildContext context) {
-    final controller = TextEditingController();
-    // Par défaut, tous les jours sont sélectionnés (Lundi à Dimanche)
-    List<int> selectedDays = [1, 2, 3, 4, 5, 6, 7]; 
+  // Fonction unifiée pour CRÉER ou MODIFIER une habitude
+  void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
+    final controller = TextEditingController(text: habitToEdit?.title ?? "");
     
+    // Si on édite, on reprend les jours existants, sinon on coche tout par défaut
+    List<int> selectedDays = habitToEdit != null 
+        ? List<int>.from(habitToEdit.activeDays) 
+        : [1, 2, 3, 4, 5, 6, 7]; 
+
     showDialog(
       context: context,
       builder: (context) {
-        // On utilise StatefulBuilder pour que la boîte de dialogue puisse se mettre à jour
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text("Nouvelle quête 📜"),
+              title: Text(habitToEdit == null ? "Nouvelle quête 📜" : "Modifier la quête ✏️"),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: controller,
                     decoration: const InputDecoration(
-                      hintText: "Ex: Sport",
+                      hintText: "Ex: Sport, Lecture...",
                       border: OutlineInputBorder(),
                     ),
                     autofocus: true,
@@ -143,7 +152,7 @@ class _HabitPageState extends State<HabitPage> {
                   const Text("Fréquence :", style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
                   
-                  // Les 7 petits boutons pour les jours
+                  // Sélecteur de jours (L M M J V S D)
                   Wrap(
                     spacing: 5,
                     children: List.generate(7, (index) {
@@ -184,18 +193,20 @@ class _HabitPageState extends State<HabitPage> {
                   child: const Text("Annuler"),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {
-                      // On envoie le titre ET les jours
-                      context.read<HabitDatabase>().addHabit(controller.text, selectedDays);
+                      if (habitToEdit == null) {
+                        // CRÉATION
+                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays);
+                      } else {
+                        // MODIFICATION
+                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays);
+                      }
                       Navigator.pop(context);
                     }
                   },
-                  child: const Text("Créer"),
+                  child: Text(habitToEdit == null ? "Créer" : "Sauvegarder"),
                 ),
               ],
             );
@@ -209,19 +220,18 @@ class _HabitPageState extends State<HabitPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // On empile les widgets pour mettre les confettis PAR DESSUS tout le reste
+      // STACK pour les confettis par dessus tout
       body: Stack(
         alignment: Alignment.topCenter,
         children: [
-          // 1. Le contenu principal
           Scaffold(
-            backgroundColor: Colors.transparent, // Important pour voir le fond
+            backgroundColor: Colors.transparent,
             appBar: AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
               title: Consumer<HabitDatabase>(
                 builder: (context, db, child) {
-                  return FadeInDown( // Animation du score qui tombe du haut
+                  return FadeInDown(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
@@ -247,7 +257,7 @@ class _HabitPageState extends State<HabitPage> {
               centerTitle: true,
             ),
             floatingActionButton: FloatingActionButton.extended(
-              onPressed: () => _createNewHabit(context),
+              onPressed: () => _showHabitDialog(context),
               backgroundColor: Colors.deepPurple,
               icon: const Icon(Icons.add, color: Colors.white),
               label: const Text("Nouvelle Quête", style: TextStyle(color: Colors.white)),
@@ -256,33 +266,36 @@ class _HabitPageState extends State<HabitPage> {
               builder: (context, db, child) {
                 return Column(
                   children: [
-                    // ANIMAL (Animé avec un petit rebond "ElasticIn")
+                    // --- L'ANIMAL ---
                     ElasticIn(
                       duration: const Duration(seconds: 2),
-                      child: PetWidget(score: db.userScore, 
-  activeSkin: db.itemActive // On passe le skin actif
-),
+                      child: PetWidget(
+                        score: db.userScore,
+                        activeSkin: db.itemActive,
+                      ),
                     ),
 
-                    // LISTE DES HABITUDES
+                    // --- LA LISTE ---
                     Expanded(
                       child: db.habits.isEmpty
                           ? Center(
                               child: FadeInUp(
-                                child: const Text("Tout est calme... Trop calme.", 
-                                  style: TextStyle(color: Colors.grey)),
+                                child: const Text(
+                                  "Aucune quête aujourd'hui...\nProfite ou ajoute-en une !",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.grey),
+                                ),
                               ),
                             )
                           : ListView.builder(
                               itemCount: db.habits.length,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                               itemBuilder: (context, index) {
                                 final habit = db.habits[index];
                                 
-                                // Chaque carte arrive une par une (Cascade)
                                 return FadeInLeft(
                                   duration: const Duration(milliseconds: 500),
-                                  delay: Duration(milliseconds: index * 100), // Effet domino
+                                  delay: Duration(milliseconds: index * 100),
                                   child: Container(
                                     margin: const EdgeInsets.only(bottom: 12),
                                     decoration: BoxDecoration(
@@ -298,30 +311,35 @@ class _HabitPageState extends State<HabitPage> {
                                     ),
                                     child: ListTile(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                      title: Text(
-                                        habit.title,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          decoration: habit.isCompletedToday ? TextDecoration.lineThrough : null,
-                                          color: habit.isCompletedToday ? Colors.grey[400] : Colors.black87,
+                                      // Clic sur le texte pour MODIFIER
+                                      title: GestureDetector(
+                                        onTap: () => _showHabitDialog(context, habitToEdit: habit),
+                                        child: Text(
+                                          habit.title,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            decoration: habit.isCompletedToday ? TextDecoration.lineThrough : null,
+                                            color: habit.isCompletedToday ? Colors.grey[400] : Colors.black87,
+                                          ),
                                         ),
                                       ),
+                                      // Checkbox pour VALIDER
                                       leading: Transform.scale(
                                         scale: 1.2,
                                         child: Checkbox(
                                           value: habit.isCompletedToday,
-                                          activeColor: Colors.green, // Vert succès
+                                          activeColor: Colors.green,
                                           shape: const CircleBorder(),
                                           onChanged: (val) {
                                             db.toggleHabit(habit);
-                                            // Si on coche (val == true), on lance les confettis !
                                             if (val == true) {
                                               _confettiController.play();
                                             }
                                           },
                                         ),
                                       ),
+                                      // Flamme de STREAK
                                       subtitle: habit.streak > 0
                                           ? Row(
                                               children: [
@@ -330,6 +348,7 @@ class _HabitPageState extends State<HabitPage> {
                                               ],
                                             )
                                           : const Text("Commence ta série !", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                      // Bouton SUPPRIMER
                                       trailing: IconButton(
                                         icon: Icon(Icons.delete_outline, color: Colors.grey[300]),
                                         onPressed: () => db.deleteHabit(habit),
@@ -346,10 +365,10 @@ class _HabitPageState extends State<HabitPage> {
             ),
           ),
 
-          // 2. Le Canon à Confettis (Invisible tant qu'il ne tire pas)
+          // --- LES CONFETTIS ---
           ConfettiWidget(
             confettiController: _confettiController,
-            blastDirection: pi / 2, // Tire vers le bas (pluie)
+            blastDirection: pi / 2,
             maxBlastForce: 5,
             minBlastForce: 2,
             emissionFrequency: 0.05,
@@ -362,38 +381,41 @@ class _HabitPageState extends State<HabitPage> {
     );
   }
 }
-// Ce widget gère l'affichage de l'animal selon le score
+
+// ---------------------------------------------------------------------------
+// WIDGET DE L'ANIMAL (Gère l'évolution et les skins)
+// ---------------------------------------------------------------------------
 class PetWidget extends StatelessWidget {
   final int score;
-  final String activeSkin; // NOUVEAU PARAMÈTRE
+  final String activeSkin;
 
   const PetWidget({super.key, required this.score, required this.activeSkin});
 
   @override
   Widget build(BuildContext context) {
-    String imagePrefix = "pet"; // Par défaut
+    String imagePrefix = "pet"; // Skin par défaut
     
-    // Si un skin est actif et que ce n'est pas "default"
+    // Si un skin est actif et n'est pas "default", on change le préfixe
     if (activeSkin != 'default') {
-      imagePrefix = activeSkin; // deviendra "skin_dragon" par exemple
+      imagePrefix = activeSkin; 
     }
 
     String imagePath;
     String statusText;
 
-    // Construction du nom du fichier : prefix + _stade + .png
+    // Logique d'évolution (Œuf -> Bébé -> Adulte)
     if (score < 50) {
       imagePath = 'assets/images/${imagePrefix}_egg.png';
-      statusText = "Œuf";
+      statusText = "Stade : Œuf (Encore ${50 - score} pièces)";
     } else if (score < 100) {
       imagePath = 'assets/images/${imagePrefix}_baby.png';
-      statusText = "Bébé";
+      statusText = "Stade : Bébé (Encore ${100 - score} pièces)";
     } else {
       imagePath = 'assets/images/${imagePrefix}_adult.png';
-      statusText = "Adulte";
+      statusText = "Stade : Adulte (Niveau Max !)";
     }
- 
-     return Container(
+
+    return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -409,14 +431,17 @@ class PetWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // L'image de l'animal
+          // On utilise Image.asset avec un gestionnaire d'erreur
+          // Au cas où l'image du skin n'existe pas encore
           Image.asset(
             imagePath,
-            height: 150, // Taille de l'image
+            height: 150,
             fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const Icon(Icons.pets, size: 100, color: Colors.grey);
+            },
           ),
           const SizedBox(height: 10),
-          // Le texte de statut
           Text(
             statusText,
             style: const TextStyle(
@@ -427,9 +452,9 @@ class PetWidget extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
-          // Barre de progression (Optionnelle mais satisfaisante)
+          // Barre de progression
           LinearProgressIndicator(
-            value: (score % 50) / 50, // Progression vers le prochain niveau
+            value: (score >= 100) ? 1.0 : (score % 50) / 50,
             backgroundColor: Colors.grey[200],
             color: Colors.orange,
             minHeight: 8,
