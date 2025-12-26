@@ -5,6 +5,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:confetti/confetti.dart';     
 import 'dart:math';
 import 'shop_page.dart'; // Pour qu'il connaisse la boutique
+import 'inventory_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,9 +50,10 @@ class _MainScreenState extends State<MainScreen> {
 
   // La liste des pages
   final List<Widget> _pages = [
-    const HabitPage(), // Ta page existante
-    const ShopPage(),  // La nouvelle page
-  ];
+  const HabitPage(),
+  const InventoryPage(), // NOUVELLE PAGE (Index 1)
+  const ShopPage(),      // La boutique passe en Index 2
+];
 
   @override
   Widget build(BuildContext context) {
@@ -61,25 +63,31 @@ class _MainScreenState extends State<MainScreen> {
       
       // La barre de navigation en bas
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _currentIndex = index; // Change la page
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.check_circle_outline),
-            selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
-            label: 'Habitudes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
-            label: 'Boutique',
-          ),
-        ],
-      ),
+  selectedIndex: _currentIndex,
+  onDestinationSelected: (int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  },
+  destinations: const [
+    NavigationDestination(
+      icon: Icon(Icons.check_circle_outline),
+      selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
+      label: 'Quêtes',
+    ),
+    // NOUVEL ONGLET
+    NavigationDestination(
+      icon: Icon(Icons.backpack_outlined),
+      selectedIcon: Icon(Icons.backpack, color: Colors.deepPurple),
+      label: 'Sac',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.storefront_outlined),
+      selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
+      label: 'Boutique',
+    ),
+  ],
+),
     );
   }
 }
@@ -251,7 +259,9 @@ class _HabitPageState extends State<HabitPage> {
                     // ANIMAL (Animé avec un petit rebond "ElasticIn")
                     ElasticIn(
                       duration: const Duration(seconds: 2),
-                      child: PetWidget(score: db.userScore),
+                      child: PetWidget(score: db.userScore, 
+  activeSkin: db.itemActive // On passe le skin actif
+),
                     ),
 
                     // LISTE DES HABITUDES
@@ -355,27 +365,35 @@ class _HabitPageState extends State<HabitPage> {
 // Ce widget gère l'affichage de l'animal selon le score
 class PetWidget extends StatelessWidget {
   final int score;
+  final String activeSkin; // NOUVEAU PARAMÈTRE
 
-  const PetWidget({super.key, required this.score});
+  const PetWidget({super.key, required this.score, required this.activeSkin});
 
   @override
   Widget build(BuildContext context) {
-    // Logique d'évolution
+    String imagePrefix = "pet"; // Par défaut
+    
+    // Si un skin est actif et que ce n'est pas "default"
+    if (activeSkin != 'default') {
+      imagePrefix = activeSkin; // deviendra "skin_dragon" par exemple
+    }
+
     String imagePath;
     String statusText;
 
+    // Construction du nom du fichier : prefix + _stade + .png
     if (score < 50) {
-      imagePath = 'assets/images/pet_egg.png';
-      statusText = "Stade : Œuf (Encore ${50 - score} pièces pour éclore)";
+      imagePath = 'assets/images/${imagePrefix}_egg.png';
+      statusText = "Œuf";
     } else if (score < 100) {
-      imagePath = 'assets/images/pet_baby.png';
-      statusText = "Stade : Bébé (Encore ${100 - score} pièces pour grandir)";
+      imagePath = 'assets/images/${imagePrefix}_baby.png';
+      statusText = "Bébé";
     } else {
-      imagePath = 'assets/images/pet_adult.png';
-      statusText = "Stade : Maître des Habitudes !";
+      imagePath = 'assets/images/${imagePrefix}_adult.png';
+      statusText = "Adulte";
     }
-
-    return Container(
+ 
+     return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(

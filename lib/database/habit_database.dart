@@ -9,15 +9,19 @@ class HabitDatabase extends ChangeNotifier {
   List<Habit> habits = [];
   int userScore = 0; // 🪙 Ton argent / XP
 
+  List<String> inventory = []; // Liste des IDs des objets achetés (ex: ['skin_dragon'])
+  String itemActive = 'default'; // Le skin actuel (par défaut 'default')
+
   Future<void> init() async {
     await Hive.initFlutter();
     Hive.registerAdapter(HabitAdapter());
     
     await Hive.openBox<Habit>(boxName);
     var settingsBox = await Hive.openBox(settingsBoxName);
-    
-    // Charger le score sauvegardé (0 par défaut)
-    userScore = settingsBox.get('score', defaultValue: 0);
+    userScore = (settingsBox.get('score') ?? 0) as int;
+    // Chargement de l'inventaire
+    inventory = List<String>.from(settingsBox.get('inventory', defaultValue: []));
+    itemActive = settingsBox.get('itemActive', defaultValue: 'default');
 
     loadHabits();
   }
@@ -59,7 +63,7 @@ class HabitDatabase extends ChangeNotifier {
     );
     final box = Hive.box<Habit>(boxName);
     box.add(newHabit);
-    loadHabits();
+    loadHabits(); 
   }
 
   void toggleHabit(Habit habit) {
@@ -97,14 +101,32 @@ class HabitDatabase extends ChangeNotifier {
 
   // NOUVEAU : Fonction pour acheter un objet
   // Renvoie 'true' si l'achat a réussi, 'false' sinon (pas assez d'argent)
-  bool buyItem(int price) {
-    if (userScore >= price) {
-      userScore -= price; // On déduit le prix
-      updateScore(0); // Astuce pour sauvegarder le nouveau score (0 ne change rien mais déclenche la save)
-      notifyListeners(); // On met à jour l'affichage
-      return true; // Succès !
-    } else {
-      return false; // Échec (Pauvre...)
+  bool buyItem(String itemId, int price) {
+    if (inventory.contains(itemId)) {
+      return true; // Déjà acheté
     }
+
+    if (userScore >= price) {
+      userScore -= price;
+      inventory.add(itemId); // Ajout à l'inventaire
+      updateSettings();      // Sauvegarde
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  void setItemActive(String itemId) {
+    itemActive = itemId;
+    updateSettings();
+    notifyListeners();
+  }
+
+  // Helper pour sauvegarder score + inventaire
+  void updateSettings() {
+    var box = Hive.box(settingsBoxName);
+    box.put('score', userScore);
+    box.put('inventory', inventory);
+    box.put('itemActive', itemActive);
   }
 }

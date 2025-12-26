@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'database/habit_database.dart';
+import 'models/items.dart'; // Assurez-vous que ce fichier existe
 
 class ShopPage extends StatelessWidget {
   const ShopPage({super.key});
@@ -17,7 +18,7 @@ class ShopPage extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Affichage du Solde en haut
+          // 1. LE SCORE (Sans 'const' devant Row car le score change)
           Consumer<HabitDatabase>(
             builder: (context, db, child) => Container(
               margin: const EdgeInsets.all(20),
@@ -31,26 +32,44 @@ class ShopPage extends StatelessWidget {
                 children: [
                   const Text("Votre Bourse : ", style: TextStyle(color: Colors.white, fontSize: 18)),
                   const Icon(Icons.stars, color: Colors.amber),
-                  Text(" ${db.userScore}", style: const TextStyle(color: Colors.amber, fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(
+                    " ${db.userScore}", 
+                    style: const TextStyle(color: Colors.amber, fontSize: 24, fontWeight: FontWeight.bold)
+                  ),
                 ],
               ),
             ),
           ),
 
-          // La Grille des objets à vendre
+          // 2. LA GRILLE AUTOMATIQUE
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2, // 2 colonnes
-              padding: const EdgeInsets.all(15),
-              childAspectRatio: 0.8, // Format des cartes (plus hautes que larges)
-              crossAxisSpacing: 15,
-              mainAxisSpacing: 15,
-              children: [
-                _buildShopItem(context, "Potion de Soin", "Répare un jour raté", 50, Icons.local_drink, Colors.redAccent),
-                _buildShopItem(context, "Bouclier Divin", "Protège votre série", 150, Icons.shield, Colors.blueAccent),
-                _buildShopItem(context, "Élixir de Force", "Double l'XP (1h)", 300, Icons.bolt, Colors.amber),
-                _buildShopItem(context, "Skin Dragon", "Change l'apparence", 1000, Icons.palette, Colors.purpleAccent),
-              ],
+            child: Consumer<HabitDatabase>(
+              builder: (context, db, child) {
+                return GridView.builder(
+                  padding: const EdgeInsets.all(15),
+                  itemCount: allShopItems.length,
+                  // C'est ce morceau qui manquait peut-être :
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.75,
+                    crossAxisSpacing: 15,
+                    mainAxisSpacing: 15,
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = allShopItems[index];
+                    return _buildShopItem(
+                      context, 
+                      db, 
+                      item.id, 
+                      item.name, 
+                      item.description, 
+                      item.price, 
+                      item.icon, 
+                      item.color
+                    );
+                  },
+                );
+              }
             ),
           ),
         ],
@@ -58,47 +77,51 @@ class ShopPage extends StatelessWidget {
     );
   }
 
-  // Widget pour fabriquer une carte d'article
-  Widget _buildShopItem(BuildContext context, String name, String desc, int price, IconData icon, Color color) {
+  // WIDGET POUR UNE CARTE D'OBJET
+  Widget _buildShopItem(BuildContext context, HabitDatabase db, String itemId, String name, String desc, int price, IconData icon, Color color) {
+    bool isOwned = db.inventory.contains(itemId);
+    bool isEquipped = db.itemActive == itemId;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
+        border: isEquipped ? Border.all(color: Colors.deepPurple, width: 3) : null,
         boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 50, color: color),
+          Icon(icon, size: 40, color: color),
           const SizedBox(height: 10),
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Text(desc, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Text(desc, style: TextStyle(color: Colors.grey[600], fontSize: 11), textAlign: TextAlign.center),
           ),
           const SizedBox(height: 15),
+          
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[100], elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isEquipped ? Colors.green : (isOwned ? Colors.deepPurple[100] : Colors.grey[100]),
+              foregroundColor: isEquipped ? Colors.white : Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
             onPressed: () {
-              // LOGIQUE D'ACHAT
-              bool success = context.read<HabitDatabase>().buyItem(price);
-              
-              if (success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Achat réussi : $name ! 🎉"), backgroundColor: Colors.green),
-                );
+              if (isEquipped) return; 
+
+              if (isOwned) {
+                db.setItemActive(itemId);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Pas assez d'argent... 😭"), backgroundColor: Colors.red),
-                );
+                bool success = db.buyItem(itemId, price);
+                if (!success) {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pas assez d'argent !")));
+                }
               }
             },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("$price ", style: const TextStyle(color: Colors.black)),
-                const Icon(Icons.stars, size: 16, color: Colors.amber),
-              ],
+            child: Text(
+              isEquipped ? "Activé" : (isOwned ? "Équiper" : "$price 🪙"),
+              style: const TextStyle(fontSize: 12),
             ),
           )
         ],
