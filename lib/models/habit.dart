@@ -17,13 +17,17 @@ class Habit extends HiveObject {
   DateTime? lastCompletedDate;
 
   @HiveField(4)
-  int streak; // NOUVEAU : La série actuelle
+  int streak;
+
+  @HiveField(5) // NOUVEAU
+  List<int> activeDays; // Liste des jours : 1=Lundi, 7=Dimanche
 
   Habit({
     required this.id,
     required this.title,
     this.isCompletedToday = false,
     this.lastCompletedDate,
-    this.streak = 0, // Par défaut à 0
+    this.streak = 0,
+    required this.activeDays, // Obligatoire maintenant
   });
 }

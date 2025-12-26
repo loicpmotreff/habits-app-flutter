@@ -24,32 +24,38 @@ class HabitDatabase extends ChangeNotifier {
 
   void loadHabits() {
     final box = Hive.box<Habit>(boxName);
-    habits = box.values.toList();
-
-    // Reset journalier (si on change de jour)
+    final allHabits = box.values.toList();
     final now = DateTime.now();
-    for (var habit in habits) {
+    
+    // 1. Reset du jour (inchangé)
+    for (var habit in allHabits) {
       if (habit.lastCompletedDate != null) {
         bool isSameDay = habit.lastCompletedDate!.year == now.year &&
             habit.lastCompletedDate!.month == now.month &&
             habit.lastCompletedDate!.day == now.day;
-            
         if (!isSameDay) {
           habit.isCompletedToday = false;
-          // Note: Ici on pourrait ajouter une logique pour remettre le streak à 0 
-          // si l'utilisateur a raté hier. Pour l'instant, on reste gentil.
           habit.save();
         }
       }
     }
+
+    // 2. FILTRE : On ne garde que les habitudes prévues pour AUJOURD'HUI
+    // now.weekday donne 1 pour Lundi, ..., 7 pour Dimanche
+    habits = allHabits.where((habit) {
+      return habit.activeDays.contains(now.weekday);
+    }).toList();
+
     notifyListeners();
   }
 
-  void addHabit(String title) {
+  // On ajoute les jours choisis en paramètre
+  void addHabit(String title, List<int> days) {
     final newHabit = Habit(
       id: DateTime.now().toString(),
       title: title,
       streak: 0,
+      activeDays: days, // On stocke les jours
     );
     final box = Hive.box<Habit>(boxName);
     box.add(newHabit);
