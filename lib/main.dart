@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:animate_do/animate_do.dart'; // Pour les animations d'entrée
-import 'package:confetti/confetti.dart';     // Pour la fête !
-import 'dart:math';                          // Pour pi
+import 'package:animate_do/animate_do.dart'; // Animations
+import 'package:confetti/confetti.dart';     // Confettis
+import 'dart:math';                          // Maths (pi)
 
-// Nos fichiers à nous
+// Nos fichiers
 import 'database/habit_database.dart';
-import 'models/habit.dart';
-import 'shop_page.dart';      // Page Boutique
-import 'inventory_page.dart'; // Page Inventaire
-
-import 'profile_page.dart';
-import 'sound_manager.dart';
+import 'models/habit.dart';   // Important pour HabitDifficulty
+import 'shop_page.dart';      // Boutique
+import 'inventory_page.dart'; // Inventaire
+import 'profile_page.dart';   // Profil (Heatmap)
+import 'sound_manager.dart';  // Gestionnaire de sons
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,15 +38,14 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
-        fontFamily: 'Round', // Si tu as une police custom, sinon retire cette ligne
       ),
-      home: const MainScreen(), // On démarre sur l'écran principal avec la navigation
+      home: const MainScreen(),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// ECRAN PRINCIPAL (Contient la barre de navigation en bas)
+// ECRAN PRINCIPAL (Navigation en bas)
 // ---------------------------------------------------------------------------
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -59,13 +57,12 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  // La liste de nos 3 pages
   final List<Widget> _pages = [
-  const HabitPage(),
-  const InventoryPage(),
-  const ShopPage(),
-  const ProfilePage(), // NOUVEAU
-];
+    const HabitPage(),      // Index 0 : Quêtes
+    const InventoryPage(),  // Index 1 : Sac
+    const ShopPage(),       // Index 2 : Boutique
+    const ProfilePage(),    // Index 3 : Profil
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +103,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// PAGE DES HABITUDES (La page principale du jeu)
+// PAGE DES HABITUDES (Liste + Animal)
 // ---------------------------------------------------------------------------
 class HabitPage extends StatefulWidget {
   const HabitPage({super.key});
@@ -130,14 +127,17 @@ class _HabitPageState extends State<HabitPage> {
     super.dispose();
   }
 
-  // Fonction unifiée pour CRÉER ou MODIFIER une habitude
+  // BOÎTE DE DIALOGUE (Création / Modification)
   void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
     final controller = TextEditingController(text: habitToEdit?.title ?? "");
     
-    // Si on édite, on reprend les jours existants, sinon on coche tout par défaut
+    // Jours sélectionnés
     List<int> selectedDays = habitToEdit != null 
         ? List<int>.from(habitToEdit.activeDays) 
         : [1, 2, 3, 4, 5, 6, 7]; 
+    
+    // Difficulté sélectionnée (Moyen par défaut)
+    HabitDifficulty selectedDifficulty = habitToEdit?.difficulty ?? HabitDifficulty.medium;
 
     showDialog(
       context: context,
@@ -149,6 +149,7 @@ class _HabitPageState extends State<HabitPage> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // CHAMP TITRE
                   TextField(
                     controller: controller,
                     decoration: const InputDecoration(
@@ -158,14 +159,37 @@ class _HabitPageState extends State<HabitPage> {
                     autofocus: true,
                   ),
                   const SizedBox(height: 15),
-                  const Text("Fréquence :", style: TextStyle(fontWeight: FontWeight.bold)),
+
+                  // SÉLECTEUR DE DIFFICULTÉ (NOUVEAU)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Difficulté :", style: TextStyle(fontWeight: FontWeight.bold)),
+                      DropdownButton<HabitDifficulty>(
+                        value: selectedDifficulty,
+                        onChanged: (HabitDifficulty? newValue) {
+                          setState(() {
+                            selectedDifficulty = newValue!;
+                          });
+                        },
+                        items: const [
+                          DropdownMenuItem(value: HabitDifficulty.easy, child: Text("Facile (+5)")),
+                          DropdownMenuItem(value: HabitDifficulty.medium, child: Text("Moyen (+10)")),
+                          DropdownMenuItem(value: HabitDifficulty.hard, child: Text("Difficile (+20)")),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 15),
+                  const Text("Jours actifs :", style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
                   
-                  // Sélecteur de jours (L M M J V S D)
+                  // SÉLECTEUR DE JOURS
                   Wrap(
                     spacing: 5,
                     children: List.generate(7, (index) {
-                      int dayId = index + 1; // 1 = Lundi
+                      int dayId = index + 1;
                       List<String> daysLabels = ["L", "M", "M", "J", "V", "S", "D"];
                       bool isSelected = selectedDays.contains(dayId);
                       
@@ -207,10 +231,19 @@ class _HabitPageState extends State<HabitPage> {
                     if (controller.text.isNotEmpty) {
                       if (habitToEdit == null) {
                         // CRÉATION
-                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays);
+                        context.read<HabitDatabase>().addHabit(
+                          controller.text, 
+                          selectedDays, 
+                          selectedDifficulty // On passe la difficulté
+                        );
                       } else {
                         // MODIFICATION
-                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays);
+                        context.read<HabitDatabase>().updateHabit(
+                          habitToEdit.id, 
+                          controller.text, 
+                          selectedDays,
+                          selectedDifficulty // On passe la difficulté
+                        );
                       }
                       Navigator.pop(context);
                     }
@@ -229,7 +262,6 @@ class _HabitPageState extends State<HabitPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // STACK pour les confettis par dessus tout
       body: Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -275,7 +307,7 @@ class _HabitPageState extends State<HabitPage> {
               builder: (context, db, child) {
                 return Column(
                   children: [
-                    // --- L'ANIMAL ---
+                    // --- ANIMAL ---
                     ElasticIn(
                       duration: const Duration(seconds: 2),
                       child: PetWidget(
@@ -284,7 +316,7 @@ class _HabitPageState extends State<HabitPage> {
                       ),
                     ),
 
-                    // --- LA LISTE ---
+                    // --- LISTE DES TÂCHES ---
                     Expanded(
                       child: db.habits.isEmpty
                           ? Center(
@@ -302,6 +334,24 @@ class _HabitPageState extends State<HabitPage> {
                               itemBuilder: (context, index) {
                                 final habit = db.habits[index];
                                 
+                                // LOGIQUE D'AFFICHAGE SELON DIFFICULTÉ
+                                Color difficultyColor;
+                                String rewardText;
+                                switch (habit.difficulty) {
+                                  case HabitDifficulty.easy:
+                                    difficultyColor = Colors.blue.shade300;
+                                    rewardText = "+5";
+                                    break;
+                                  case HabitDifficulty.medium:
+                                    difficultyColor = Colors.purple.shade300;
+                                    rewardText = "+10";
+                                    break;
+                                  case HabitDifficulty.hard:
+                                    difficultyColor = Colors.red.shade300;
+                                    rewardText = "+20";
+                                    break;
+                                }
+                                
                                 return FadeInLeft(
                                   duration: const Duration(milliseconds: 500),
                                   delay: Duration(milliseconds: index * 100),
@@ -310,6 +360,8 @@ class _HabitPageState extends State<HabitPage> {
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(15),
+                                      // Bordure colorée à gauche pour indiquer la difficulté
+                                      border: Border(left: BorderSide(color: difficultyColor, width: 6)),
                                       boxShadow: [
                                         BoxShadow(
                                           color: Colors.grey.withOpacity(0.1),
@@ -320,7 +372,8 @@ class _HabitPageState extends State<HabitPage> {
                                     ),
                                     child: ListTile(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                      // Clic sur le texte pour MODIFIER
+                                      
+                                      // Titre (cliquable pour modifier)
                                       title: GestureDetector(
                                         onTap: () => _showHabitDialog(context, habitToEdit: habit),
                                         child: Text(
@@ -333,7 +386,8 @@ class _HabitPageState extends State<HabitPage> {
                                           ),
                                         ),
                                       ),
-                                      // Checkbox pour VALIDER
+                                      
+                                      // Case à cocher
                                       leading: Transform.scale(
                                         scale: 1.2,
                                         child: Checkbox(
@@ -344,21 +398,36 @@ class _HabitPageState extends State<HabitPage> {
                                             db.toggleHabit(habit);
                                             if (val == true) {
                                               _confettiController.play();
-                                              SoundManager.play('success.mp3');
+                                              SoundManager.play('success.mp3'); // SON DE SUCCÈS
                                             }
                                           },
                                         ),
                                       ),
-                                      // Flamme de STREAK
-                                      subtitle: habit.streak > 0
-                                          ? Row(
-                                              children: [
-                                                const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
-                                                Text(" ${habit.streak} jours", style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.bold)),
-                                              ],
-                                            )
-                                          : const Text("Commence ta série !", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                                      // Bouton SUPPRIMER
+                                      
+                                      // Sous-titre (Streak + Récompense)
+                                      subtitle: Row(
+                                        children: [
+                                          if (habit.streak > 0) ...[
+                                            const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
+                                            Text(" ${habit.streak} j  ", style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.bold)),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          // Badge de récompense
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              "$rewardText 🪙", 
+                                              style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold)
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      
+                                      // Bouton supprimer
                                       trailing: IconButton(
                                         icon: Icon(Icons.delete_outline, color: Colors.grey[300]),
                                         onPressed: () => db.deleteHabit(habit),
@@ -375,7 +444,7 @@ class _HabitPageState extends State<HabitPage> {
             ),
           ),
 
-          // --- LES CONFETTIS ---
+          // --- CONFETTIS ---
           ConfettiWidget(
             confettiController: _confettiController,
             blastDirection: pi / 2,
@@ -393,7 +462,7 @@ class _HabitPageState extends State<HabitPage> {
 }
 
 // ---------------------------------------------------------------------------
-// WIDGET DE L'ANIMAL (Gère l'évolution et les skins)
+// WIDGET ANIMAL (Pet)
 // ---------------------------------------------------------------------------
 class PetWidget extends StatelessWidget {
   final int score;
@@ -403,17 +472,14 @@ class PetWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String imagePrefix = "pet"; // Skin par défaut
-    
-    // Si un skin est actif et n'est pas "default", on change le préfixe
+    String imagePrefix = "pet";
     if (activeSkin != 'default') {
-      imagePrefix = activeSkin; 
+      imagePrefix = activeSkin;
     }
 
     String imagePath;
     String statusText;
-
-    // Logique d'évolution (Œuf -> Bébé -> Adulte)
+    // Niveaux d'évolution
     if (score < 50) {
       imagePath = 'assets/images/${imagePrefix}_egg.png';
       statusText = "Stade : Œuf (Encore ${50 - score} pièces)";
@@ -422,7 +488,7 @@ class PetWidget extends StatelessWidget {
       statusText = "Stade : Bébé (Encore ${100 - score} pièces)";
     } else {
       imagePath = 'assets/images/${imagePrefix}_adult.png';
-      statusText = "Stade : Adulte (Niveau Max !)";
+      statusText = "Stade : Adulte (Max !)";
     }
 
     return Container(
@@ -441,8 +507,6 @@ class PetWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // On utilise Image.asset avec un gestionnaire d'erreur
-          // Au cas où l'image du skin n'existe pas encore
           Image.asset(
             imagePath,
             height: 150,
@@ -462,7 +526,6 @@ class PetWidget extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
-          // Barre de progression
           LinearProgressIndicator(
             value: (score >= 100) ? 1.0 : (score % 50) / 50,
             backgroundColor: Colors.grey[200],
