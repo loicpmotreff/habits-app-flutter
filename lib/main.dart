@@ -10,6 +10,9 @@ import 'models/habit.dart';
 import 'shop_page.dart';      // Page Boutique
 import 'inventory_page.dart'; // Page Inventaire
 
+import 'profile_page.dart';
+import 'sound_manager.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -58,10 +61,11 @@ class _MainScreenState extends State<MainScreen> {
 
   // La liste de nos 3 pages
   final List<Widget> _pages = [
-    const HabitPage(),      // Index 0
-    const InventoryPage(),  // Index 1
-    const ShopPage(),       // Index 2
-  ];
+  const HabitPage(),
+  const InventoryPage(),
+  const ShopPage(),
+  const ProfilePage(), // NOUVEAU
+];
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +93,11 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.storefront_outlined),
             selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
             label: 'Boutique',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person, color: Colors.deepPurple),
+            label: 'Profil',
           ),
         ],
       ),
@@ -335,6 +344,7 @@ class _HabitPageState extends State<HabitPage> {
                                             db.toggleHabit(habit);
                                             if (val == true) {
                                               _confettiController.play();
+                                              SoundManager.play('success.mp3');
                                             }
                                           },
                                         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'database/habit_database.dart';
 import 'models/items.dart'; // Assurez-vous que ce fichier existe
+import 'sound_manager.dart';
 
 class ShopPage extends StatelessWidget {
   const ShopPage({super.key});
@@ -114,9 +115,28 @@ class ShopPage extends StatelessWidget {
                 db.setItemActive(itemId);
               } else {
                 bool success = db.buyItem(itemId, price);
-                if (!success) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pas assez d'argent !")));
-                }
+                if (success) {
+                // 1. Son de succès
+                SoundManager.play('coin.mp3');
+                
+                // 2. Message vert
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Achat réussi ! 🎉"),
+                    backgroundColor: Colors.green,
+                    duration: Duration(milliseconds: 800),
+                  ),
+                );
+              } else {
+                // 1. Message rouge (Pas de son ou son d'erreur)
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pas assez d'argent... 😭"),
+                    backgroundColor: Colors.red,
+                    duration: Duration(milliseconds: 800),
+                  ),
+                );
+              }
               }
             },
             child: Text(

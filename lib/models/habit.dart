@@ -19,8 +19,11 @@ class Habit extends HiveObject {
   @HiveField(4)
   int streak;
 
-  @HiveField(5) // NOUVEAU
-  List<int> activeDays; // Liste des jours : 1=Lundi, 7=Dimanche
+  @HiveField(5)
+  List<int> activeDays; // 1 = Lundi, 7 = Dimanche
+
+  @HiveField(6)
+  List<DateTime> completedDays; // Historique pour le calendrier
 
   Habit({
     required this.id,
@@ -28,6 +31,7 @@ class Habit extends HiveObject {
     this.isCompletedToday = false,
     this.lastCompletedDate,
     this.streak = 0,
-    required this.activeDays, // Obligatoire maintenant
+    required this.activeDays,
+    this.completedDays = const [], // Initialisé vide par défaut
   });
 }

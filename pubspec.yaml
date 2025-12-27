@@ -39,6 +39,8 @@ dependencies:
   uuid: ^4.0.0
   animate_do: ^3.0.2  # Pour des animations faciles (FadeIn, SlideIn...)
   confetti: ^0.7.0    # Pour l'explosion quand on gagne
+  flutter_heatmap_calendar: ^1.0.5  
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +73,7 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
