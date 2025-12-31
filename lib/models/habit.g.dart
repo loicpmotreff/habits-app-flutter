@@ -33,13 +33,14 @@ class HabitAdapter extends TypeAdapter<Habit> {
       currentValue: fields[10] == null ? 0 : fields[10] as int,
       unit: fields[11] == null ? '' : fields[11] as String,
       isTimer: fields[12] == null ? false : fields[12] as bool,
+      isNegative: fields[13] == null ? false : fields[13] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Habit obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -65,7 +66,9 @@ class HabitAdapter extends TypeAdapter<Habit> {
       ..writeByte(11)
       ..write(obj.unit)
       ..writeByte(12)
-      ..write(obj.isTimer);
+      ..write(obj.isTimer)
+      ..writeByte(13)
+      ..write(obj.isNegative);
   }
 
   @override

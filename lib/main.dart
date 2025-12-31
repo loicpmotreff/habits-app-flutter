@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:confetti/confetti.dart';
-import 'dart:async'; // Pour le Timer
+import 'dart:async';
 import 'dart:math';
 
 import 'database/habit_database.dart';
@@ -117,8 +117,9 @@ class _HabitPageState extends State<HabitPage> {
     TextEditingController targetController = TextEditingController(text: (habitToEdit?.targetValue ?? 1).toString());
     TextEditingController unitController = TextEditingController(text: habitToEdit?.unit ?? "");
     
-    // NOUVEAU : Interrupteur Timer
     bool isTimerMode = habitToEdit?.isTimer ?? false;
+    // NOUVEAU : Interrupteur "Habitude Négative"
+    bool isNegativeMode = habitToEdit?.isNegative ?? false;
 
     showDialog(
       context: context,
@@ -134,88 +135,78 @@ class _HabitPageState extends State<HabitPage> {
                     TextField(controller: controller, decoration: const InputDecoration(hintText: "Titre", border: OutlineInputBorder()), autofocus: true),
                     const SizedBox(height: 15),
 
-                    // SWITCH TIMER
-                    // ... (Le début de la colonne avec le TextField titre reste pareil)
+                    // SWITCH : HABITUDE NÉGATIVE
+                    SwitchListTile(
+                      title: const Text("À éviter (Négatif) 🚭", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      subtitle: const Text("Coché par défaut. Décoche si tu craques !"),
+                      value: isNegativeMode,
+                      activeColor: Colors.red, // Rouge pour danger
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (val) {
+                        setState(() {
+                          isNegativeMode = val;
+                          if (isNegativeMode) isTimerMode = false; // Incompatible pour simplifier
+                        });
+                      },
+                    ),
 
-                    const SizedBox(height: 10), // Un peu d'espace avant le bloc chrono
-
-                    // BLOC CHRONOMÈTRE
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.withOpacity(0.05), // Fond très léger
-                        borderRadius: BorderRadius.circular(10),
+                    // SWITCH : CHRONO (Caché si Négatif)
+                    if (!isNegativeMode) ...[
+                      const Divider(),
+                      SwitchListTile(
+                        title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        subtitle: const Text("Lancer un compte à rebours"),
+                        value: isTimerMode,
+                        activeColor: Colors.deepPurple,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (val) {
+                          setState(() {
+                            isTimerMode = val;
+                            if (isTimerMode && unitController.text.isEmpty) unitController.text = "min";
+                          });
+                        },
                       ),
-                      child: Column(
+                    ],
+
+                    const SizedBox(height: 15),
+
+                    // CHAMPS OBJECTIF (Cachés si Négatif car c'est binaire)
+                    if (!isNegativeMode)
+                      Row(
                         children: [
-                          SwitchListTile(
-                            title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            subtitle: const Text("Lancer un compte à rebours", style: TextStyle(fontSize: 12)),
-                            value: isTimerMode,
-                            activeColor: Colors.deepPurple,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10), // Réduit les marges internes
-                            onChanged: (val) {
-                              setState(() {
-                                isTimerMode = val;
-                                if (isTimerMode && unitController.text.isEmpty) {
-                                  unitController.text = "min";
-                                }
-                              });
-                            },
-                          ),
-                          
-                          // LA SÉPARATION QUE TU VOULAIS
-                          if (isTimerMode) ...[
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10),
-                              child: Divider(height: 1), // Ligne fine
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: targetController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: isTimerMode ? "Durée" : "Objectif",
+                                helperText: isTimerMode ? "en minutes" : "ex: 5",
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                              ),
                             ),
-                            const SizedBox(height: 15), // Espace aéré
-                          ],
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: unitController,
+                              enabled: !isTimerMode,
+                              decoration: InputDecoration(
+                                labelText: "Unité",
+                                helperText: isTimerMode ? "Auto" : "ex: verres",
+                                hintText: isTimerMode ? "minutes" : "fois",
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-
-                    const SizedBox(height: 15), // Espace entre le bloc chrono et les champs
-
-                    // LES CHAMPS DE SAISIE (Objectif / Unité)
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: targetController,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: isTimerMode ? "Durée" : "Objectif",
-                              helperText: isTimerMode ? "en minutes" : "ex: 5", // Aide visuelle en dessous
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: unitController,
-                            enabled: !isTimerMode,
-                            decoration: InputDecoration(
-                              labelText: "Unité",
-                              helperText: isTimerMode ? "Auto" : "ex: verres", // Aide visuelle
-                              hintText: isTimerMode ? "minutes" : "fois",
-                              border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                     
-                    const SizedBox(height: 20), // Espace avant les boutons de difficulté
-
-                    // ... (La suite avec DropdownButton reste pareil)
+                    const SizedBox(height: 15),
                     
-                    // Sélecteurs (Difficulty, Category, Days) - Version compacte pour gagner de la place
                     DropdownButton<HabitDifficulty>(
                       value: selectedDifficulty,
                       isExpanded: true,
@@ -273,9 +264,9 @@ class _HabitPageState extends State<HabitPage> {
                       String unit = isTimerMode ? "min" : unitController.text.trim();
 
                       if (habitToEdit == null) {
-                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode);
+                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
                       } else {
-                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode);
+                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
                       }
                       Navigator.pop(context);
                     }
@@ -342,7 +333,6 @@ class _HabitPageState extends State<HabitPage> {
                                 return FadeInLeft(
                                   duration: const Duration(milliseconds: 500),
                                   delay: Duration(milliseconds: index * 100),
-                                  // ICI : ON UTILISE NOTRE NOUVEAU WIDGET "HabitTile"
                                   child: HabitTile(
                                     habit: habit, 
                                     db: db, 
@@ -371,22 +361,18 @@ class _HabitPageState extends State<HabitPage> {
 }
 
 // ---------------------------------------------------------------------------
-// NOUVEAU WIDGET : GÈRE L'AFFICHAGE ET LE TIMER DE CHAQUE HABITUDE
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// WIDGET HABIT TILE (Version Simplifiée qui ouvre le Focus Mode)
+// WIDGET HABIT TILE
 // ---------------------------------------------------------------------------
 class HabitTile extends StatelessWidget {
   final Habit habit;
   final HabitDatabase db;
   final VoidCallback onEdit;
-  final ConfettiController confettiController; // On le garde pour les checkboxes simples
+  final ConfettiController confettiController;
 
   const HabitTile({super.key, required this.habit, required this.db, required this.onEdit, required this.confettiController});
 
   @override
   Widget build(BuildContext context) {
-    // Détails visuels (Couleurs/Icones)
     Map<String, dynamic> details;
     switch (habit.category) {
       case HabitCategory.sport: details = {'icon': Icons.fitness_center, 'color': Colors.orange}; break;
@@ -398,35 +384,33 @@ class HabitTile extends StatelessWidget {
     }
 
     bool isCounter = habit.targetValue > 1 && !habit.isTimer;
+    
+    // Si c'est négatif, on change la couleur principale en ROUGE quand c'est "Pas fait" (décoché)
+    Color mainColor = habit.isNegative ? Colors.red : details['color'];
+    IconData mainIcon = habit.isNegative ? Icons.block : details['icon'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border(left: BorderSide(color: details['color'], width: 6)),
+        border: Border(left: BorderSide(color: mainColor, width: 6)),
         boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 4))],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         
-        // --- GAUCHE : CHECKBOX OU PLAY ---
+        // --- GAUCHE ---
         leading: habit.isTimer
             ? IconButton(
                 icon: Icon(
                   habit.isCompletedToday ? Icons.check_circle : Icons.play_circle_fill,
-                  color: habit.isCompletedToday ? Colors.green : details['color'],
+                  color: habit.isCompletedToday ? Colors.green : mainColor,
                   size: 34,
                 ),
                 onPressed: () {
                   if (!habit.isCompletedToday) {
-                    // C'EST ICI QU'ON OUVRE LA NOUVELLE PAGE FOCUS
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FocusTimerPage(habit: habit, db: db),
-                      ),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => FocusTimerPage(habit: habit, db: db)));
                   }
                 },
               )
@@ -435,12 +419,17 @@ class HabitTile extends StatelessWidget {
                     scale: 1.2,
                     child: Checkbox(
                       value: habit.isCompletedToday,
-                      activeColor: details['color'],
+                      activeColor: habit.isNegative ? Colors.green : mainColor, // Vert si coché (Bravo), même pour négatif
                       shape: const CircleBorder(),
                       onChanged: (val) {
+                        // Pour une négative : val=false signifie qu'on craque. val=true signifie qu'on répare.
                         int change = val == true ? 1 : -1;
                         db.updateProgress(habit, change);
-                        if (val == true) {
+                        
+                        // Son différent si on craque pour une négative
+                        if (habit.isNegative && val == false) {
+                           // Son d'échec ?
+                        } else if (val == true) {
                           confettiController.play();
                           SoundManager.play('success.mp3');
                         }
@@ -449,7 +438,7 @@ class HabitTile extends StatelessWidget {
                   )
                 : null),
 
-        // --- CENTRE : TITRE ---
+        // --- CENTRE ---
         title: GestureDetector(
           onTap: onEdit,
           child: Column(
@@ -460,16 +449,12 @@ class HabitTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  decoration: habit.isCompletedToday ? TextDecoration.lineThrough : null,
-                  color: habit.isCompletedToday ? Colors.grey[400] : Colors.black87,
+                  decoration: (habit.isCompletedToday && !habit.isNegative) ? TextDecoration.lineThrough : null, // On ne raye pas les négatives cochées (car coché = bien)
+                  color: (habit.isCompletedToday && !habit.isNegative) ? Colors.grey[400] : Colors.black87,
                 ),
               ),
-              // Sous-titre conditionnel
               if (habit.isTimer)
-                Text(
-                   habit.isCompletedToday ? "Terminé !" : "${habit.targetValue} min",
-                   style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                )
+                Text(habit.isCompletedToday ? "Terminé !" : "${habit.targetValue} min", style: TextStyle(color: Colors.grey[600], fontSize: 12))
               else if (habit.streak > 0)
                  Row(children: [
                     const Icon(Icons.local_fire_department, color: Colors.orange, size: 14),
@@ -479,8 +464,7 @@ class HabitTile extends StatelessWidget {
           ),
         ),
 
-        // --- DROITE : COMPTEUR OU SUPPRESSION ---
-        // On a enlevé le chrono d'ici pour éviter l'erreur OVERFLOW
+        // --- DROITE ---
         trailing: isCounter
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -491,7 +475,7 @@ class HabitTile extends StatelessWidget {
                   ),
                   Text("${habit.currentValue}/${habit.targetValue} ${habit.unit}", style: const TextStyle(fontWeight: FontWeight.bold)),
                   IconButton(
-                    icon: Icon(Icons.add_circle, color: details['color']),
+                    icon: Icon(Icons.add_circle, color: mainColor),
                     onPressed: () {
                       db.updateProgress(habit, 1);
                       if (habit.currentValue + 1 >= habit.targetValue && !habit.isCompletedToday) {
@@ -510,34 +494,9 @@ class HabitTile extends StatelessWidget {
     );
   }
 }
-class PetWidget extends StatelessWidget {
-  final int score;
-  final String activeSkin;
-  const PetWidget({super.key, required this.score, required this.activeSkin});
 
-  @override
-  Widget build(BuildContext context) {
-    String imagePrefix = activeSkin != 'default' ? activeSkin : "pet";
-    String imagePath = score < 50 ? 'assets/images/${imagePrefix}_egg.png' : (score < 100 ? 'assets/images/${imagePrefix}_baby.png' : 'assets/images/${imagePrefix}_adult.png');
-    
-    return Container(
-      padding: const EdgeInsets.all(20),
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 10)]),
-      child: Column(
-        children: [
-          Image.asset(imagePath, height: 120, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.pets, size: 80, color: Colors.grey)),
-          const SizedBox(height: 10),
-          LinearProgressIndicator(value: (score >= 100) ? 1.0 : (score % 50) / 50, backgroundColor: Colors.grey[200], color: Colors.orange, minHeight: 6, borderRadius: BorderRadius.circular(10)),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// NOUVELLE PAGE : MODE FOCUS (Chronomètre Plein Écran) - DESIGN CORRIGÉ (CENTRÉ)
-// ---------------------------------------------------------------------------
+// (La classe FocusTimerPage que je t'ai donnée juste avant reste ICI en bas, inchangée)
+// Copie-la ici si tu as remplacé tout le fichier.
 class FocusTimerPage extends StatefulWidget {
   final Habit habit;
   final HabitDatabase db;
@@ -617,7 +576,6 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
           SafeArea(
             child: Column(
               children: [
-                // 1. EN-TÊTE (TITRE)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
                   child: Text(
@@ -625,16 +583,12 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
                     style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ),
-
-                // Le premier Spacer pousse tout ce qui suit vers le bas
                 const Spacer(),
-
-                // 2. ZONE CENTRALE (C'est ici que ça sera parfaitement centré)
                 Center(
                   child: _isFinished
                       ? FadeInUp(
                           child: Column(
-                            mainAxisSize: MainAxisSize.min, // Important pour le centrage
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Image.asset(
                                 _getPetImagePath(),
@@ -643,17 +597,9 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
                                 errorBuilder: (c, e, s) => const Icon(Icons.emoji_events, size: 150, color: Colors.amber),
                               ),
                               const SizedBox(height: 30),
-                              const Text(
-                                "BRAVO ! 🎉",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold),
-                              ),
+                              const Text("BRAVO ! 🎉", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 10),
-                              Text(
-                                "Tu as assuré !",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 20),
-                              ),
+                              Text("Tu as assuré !", textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 20)),
                             ],
                           ),
                         )
@@ -673,41 +619,24 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
                                     color: Colors.amber,
                                   ),
                                 ),
-                                Text(
-                                  _formatTime(_secondsRemaining),
-                                  style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
-                                ),
+                                Text(_formatTime(_secondsRemaining), style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
                               ],
                             ),
                             const SizedBox(height: 30),
-                            Text(
-                              _isRunning ? "Focus en cours..." : "Pause",
-                              style: const TextStyle(color: Colors.white70, fontSize: 18),
-                            ),
+                            Text(_isRunning ? "Focus en cours..." : "Pause", style: const TextStyle(color: Colors.white70, fontSize: 18)),
                           ],
                         ),
                 ),
-
-                // Le deuxième Spacer pousse tout ce qui précède vers le haut (équilibre parfait)
                 const Spacer(),
-
-                // 3. BOUTONS DU BAS
                 Padding(
                   padding: const EdgeInsets.only(bottom: 40, left: 20, right: 20),
                   child: _isFinished
                       ? FadeInUp(
                           delay: const Duration(milliseconds: 500),
                           child: SizedBox(
-                            width: double.infinity, // Bouton large pour bien cadrer
+                            width: double.infinity,
                             child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                elevation: 8,
-                              ),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 18), textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), elevation: 8),
                               onPressed: () => Navigator.pop(context),
                               icon: const Icon(Icons.check_circle, size: 28),
                               label: const Text("Récupérer ma récompense"),
@@ -717,10 +646,7 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text("Abandonner", style: TextStyle(color: Colors.white54)),
-                            ),
+                            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Abandonner", style: TextStyle(color: Colors.white54))),
                             const SizedBox(width: 20),
                             FloatingActionButton.large(
                               backgroundColor: Colors.amber,
@@ -738,13 +664,38 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
               ],
             ),
           ),
-          
           ConfettiWidget(
             confettiController: _confettiController,
             blastDirectionality: BlastDirectionality.explosive,
             numberOfParticles: 50,
             colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// LE RESTE (PetWidget) est pareil qu'avant, tu peux laisser tel quel si c'est déjà là.
+class PetWidget extends StatelessWidget {
+  final int score;
+  final String activeSkin;
+  const PetWidget({super.key, required this.score, required this.activeSkin});
+
+  @override
+  Widget build(BuildContext context) {
+    String imagePrefix = activeSkin != 'default' ? activeSkin : "pet";
+    String imagePath = score < 50 ? 'assets/images/${imagePrefix}_egg.png' : (score < 100 ? 'assets/images/${imagePrefix}_baby.png' : 'assets/images/${imagePrefix}_adult.png');
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 10)]),
+      child: Column(
+        children: [
+          Image.asset(imagePath, height: 120, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.pets, size: 80, color: Colors.grey)),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(value: (score >= 100) ? 1.0 : (score % 50) / 50, backgroundColor: Colors.grey[200], color: Colors.orange, minHeight: 6, borderRadius: BorderRadius.circular(10)),
         ],
       ),
     );

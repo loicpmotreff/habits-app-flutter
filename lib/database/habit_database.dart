@@ -39,24 +39,41 @@ class HabitDatabase extends ChangeNotifier {
     final now = DateTime.now();
 
     for (var habit in allHabits) {
+      // Vérification du changement de jour
       if (habit.lastCompletedDate != null) {
         bool isSameDay = habit.lastCompletedDate!.year == now.year &&
             habit.lastCompletedDate!.month == now.month &&
             habit.lastCompletedDate!.day == now.day;
         
         if (!isSameDay) {
-          habit.isCompletedToday = false;
-          habit.currentValue = 0;
+          // C'EST UN NOUVEAU JOUR !
+          if (habit.isNegative) {
+             // Si c'est une habitude négative, elle commence VALIDÉE (On suppose qu'on a tenu bon)
+             // L'utilisateur devra la décocher s'il craque.
+             habit.isCompletedToday = true;
+             habit.currentValue = habit.targetValue; // Visuellement rempli
+          } else {
+             // Habitude classique : remise à zéro
+             habit.isCompletedToday = false;
+             habit.currentValue = 0;
+          }
           habit.save();
         }
+      } else {
+        // Cas spécial : Première création ou jamais touché
+        // Si on crée une habitude négative aujourd'hui, elle devrait être valide par défaut ? 
+        // Pour l'instant on laisse l'utilisateur la cocher la première fois pour activer le cycle.
       }
     }
     habits = allHabits.where((habit) => habit.activeDays.contains(now.weekday)).toList();
     notifyListeners();
   }
 
-  // AJOUTER (Avec isTimer)
-  void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer) {
+  // AJOUTER (Avec isNegative)
+  void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer, bool isNegative) {
+    // Si c'est négatif, on la considère comme faite par défaut à la création (on part du principe que tu n'as pas encore craqué)
+    bool startCompleted = isNegative; 
+    
     final newHabit = Habit(
       id: DateTime.now().toString(),
       title: title,
@@ -66,17 +83,20 @@ class HabitDatabase extends ChangeNotifier {
       difficulty: difficulty,
       category: category,
       targetValue: targetValue,
-      currentValue: 0,
+      currentValue: startCompleted ? targetValue : 0, // Rempli si négatif
       unit: unit,
-      isTimer: isTimer, // <--- NOUVEAU
+      isTimer: isTimer,
+      isNegative: isNegative, // <--- NOUVEAU
+      isCompletedToday: startCompleted, 
+      lastCompletedDate: DateTime.now(), // On marque la date pour le reset de demain
     );
     final box = Hive.box<Habit>(boxName);
     box.add(newHabit);
     loadHabits();
   }
 
-  // MODIFIER (Avec isTimer)
-  void updateHabit(String id, String newTitle, List<int> newDays, HabitDifficulty newDifficulty, HabitCategory newCategory, int newTargetValue, String newUnit, bool isTimer) {
+  // MODIFIER (Avec isNegative)
+  void updateHabit(String id, String newTitle, List<int> newDays, HabitDifficulty newDifficulty, HabitCategory newCategory, int newTargetValue, String newUnit, bool isTimer, bool isNegative) {
     final habitIndex = habits.indexWhere((h) => h.id == id);
     if (habitIndex != -1) {
       final habit = habits[habitIndex];
@@ -86,7 +106,8 @@ class HabitDatabase extends ChangeNotifier {
       habit.category = newCategory;
       habit.targetValue = newTargetValue;
       habit.unit = newUnit;
-      habit.isTimer = isTimer; // <--- UPDATE
+      habit.isTimer = isTimer;
+      habit.isNegative = isNegative; // <--- UPDATE
       habit.save();
       loadHabits();
     }
@@ -96,30 +117,28 @@ class HabitDatabase extends ChangeNotifier {
     final today = DateTime.now();
     final todayNormalized = DateTime(today.year, today.month, today.day);
 
-    // Si c'est un timer, targetValue est en minutes, mais on gère la validation directement.
-    // Cette fonction sert surtout pour les compteurs et checkboxes.
-    
     int newValue = habit.currentValue + change;
     if (newValue < 0) newValue = 0;
-    // Note : Pour le timer, on ne bloque pas newValue ici car on s'en sert différemment
     if (!habit.isTimer && newValue > habit.targetValue) newValue = habit.targetValue;
     
     habit.currentValue = newValue;
     
-    // Logique de complétion
     bool isNowCompleted;
     if (habit.isTimer) {
-      // Pour le timer, c'est l'UI qui dira "C'est fini" en appelant cette fonction avec une valeur spéciale ou manuellement
-      // Ici on simplifie : si on appelle updateProgress sur un timer terminé, on considère que c'est bon
-      isNowCompleted = habit.currentValue >= 1; // 1 = Timer Fini
+      isNowCompleted = habit.currentValue >= 1; 
     } else {
       isNowCompleted = habit.currentValue >= habit.targetValue;
     }
 
+    // LOGIQUE DE GAIN / PERTE
     if (isNowCompleted && !habit.isCompletedToday) {
+      // ON VIENT DE VALIDER (Ou re-valider)
       habit.isCompletedToday = true;
       habit.lastCompletedDate = DateTime.now();
-      habit.streak++;
+      
+      // Si c'est négatif, ça veut dire qu'on a "réparé" son erreur (on a recoché la case)
+      // On ne gagne pas de streak supplémentaire si on fait juste le yoyo, mais on récupère son état.
+      if (!habit.isNegative) habit.streak++;
 
       int reward = 10;
       if (habit.difficulty == HabitDifficulty.easy) reward = 5;
@@ -129,15 +148,20 @@ class HabitDatabase extends ChangeNotifier {
       if (!habit.completedDays.contains(todayNormalized)) {
         habit.completedDays.add(todayNormalized);
       }
+
     } 
     else if (!isNowCompleted && habit.isCompletedToday) {
+      // ON VIENT D'ANNULER (Ou de craquer pour une négative)
       habit.isCompletedToday = false;
-      habit.streak = (habit.streak > 0) ? habit.streak - 1 : 0;
+      
+      // Si c'est une habitude classique, on perd le streak.
+      // Si c'est une habitude négative, "décocher" veut dire "J'ai craqué". C'est un échec.
+      if (habit.streak > 0) habit.streak--; // On perd un jour de flamme
 
       int penalty = 10;
       if (habit.difficulty == HabitDifficulty.easy) penalty = 5;
       if (habit.difficulty == HabitDifficulty.hard) penalty = 20;
-      updateScore(-penalty);
+      updateScore(-penalty); // On perd l'argent
 
       habit.completedDays.removeWhere((date) => 
         date.year == today.year && date.month == today.month && date.day == today.day
@@ -147,11 +171,10 @@ class HabitDatabase extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Force la validation (Pour le Timer quand il arrive à 0) ---
   void completeHabit(Habit habit) {
     if (!habit.isCompletedToday) {
-      habit.currentValue = habit.targetValue; // On met au max visuellement
-      updateProgress(habit, 0); // Déclenche la logique de gain
+      habit.currentValue = habit.targetValue; 
+      updateProgress(habit, 0); 
     }
   }
 

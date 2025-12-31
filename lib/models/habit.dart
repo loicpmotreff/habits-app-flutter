@@ -49,7 +49,7 @@ class Habit extends HiveObject {
   HabitCategory category;
 
   @HiveField(9, defaultValue: 1)
-  int targetValue; // Si Timer = Durée en minutes. Si Compteur = Objectif.
+  int targetValue;
 
   @HiveField(10, defaultValue: 0)
   int currentValue;
@@ -57,9 +57,12 @@ class Habit extends HiveObject {
   @HiveField(11, defaultValue: '') 
   String unit;
 
-  // --- NOUVEAU CHAMP ---
   @HiveField(12, defaultValue: false)
-  bool isTimer; // Est-ce un chronomètre ?
+  bool isTimer;
+
+  // --- NOUVEAU CHAMP ---
+  @HiveField(13, defaultValue: false)
+  bool isNegative; // True = "À ne pas faire" (Commence validé)
 
   Habit({
     required this.id,
@@ -74,6 +77,7 @@ class Habit extends HiveObject {
     this.targetValue = 1,
     this.currentValue = 0,
     this.unit = '',
-    this.isTimer = false, // Par défaut non
+    this.isTimer = false,
+    this.isNegative = false, // Par défaut c'est une habitude positive
   });
 }
