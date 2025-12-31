@@ -11,6 +11,7 @@ import 'shop_page.dart';
 import 'inventory_page.dart';
 import 'profile_page.dart';
 import 'sound_manager.dart';
+import 'habit_details_page.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -140,7 +141,7 @@ class _HabitPageState extends State<HabitPage> {
                       title: const Text("À éviter (Négatif) 🚭", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       subtitle: const Text("Coché par défaut. Décoche si tu craques !"),
                       value: isNegativeMode,
-                      activeColor: Colors.red, // Rouge pour danger
+                      activeThumbColor: Colors.red, // Rouge pour danger
                       contentPadding: EdgeInsets.zero,
                       onChanged: (val) {
                         setState(() {
@@ -157,7 +158,7 @@ class _HabitPageState extends State<HabitPage> {
                         title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         subtitle: const Text("Lancer un compte à rebours"),
                         value: isTimerMode,
-                        activeColor: Colors.deepPurple,
+                        activeThumbColor: Colors.deepPurple,
                         contentPadding: EdgeInsets.zero,
                         onChanged: (val) {
                           setState(() {
@@ -438,9 +439,21 @@ class HabitTile extends StatelessWidget {
                   )
                 : null),
 
-        // --- CENTRE ---
+        // --- CENTRE : TITRE ---
         title: GestureDetector(
-          onTap: onEdit,
+          onTap: () {
+            // NOUVEAU : On ouvre la page de détails
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HabitDetailsPage(
+                  habit: habit,
+                  db: db,
+                  onEdit: onEdit, // On passe la fonction d'édition à la page suivante
+                ),
+              ),
+            );
+          },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -486,10 +499,7 @@ class HabitTile extends StatelessWidget {
                   ),
                 ],
               )
-            : IconButton(
-                icon: Icon(Icons.delete_outline, color: Colors.grey[300]),
-                onPressed: () => db.deleteHabit(habit),
-              ),
+            : const Icon(Icons.chevron_right, color: Colors.grey),
       ),
     );
   }
@@ -653,7 +663,11 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
                               onPressed: () {
                                 setState(() {
                                   _isRunning = !_isRunning;
-                                  if (_isRunning) _startTimer(); else _timer.cancel();
+                                  if (_isRunning) {
+                                    _startTimer();
+                                  } else {
+                                    _timer.cancel();
+                                  }
                                 });
                               },
                               child: Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 40, color: Colors.deepPurple),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
 import 'database/habit_database.dart';
-import 'models/habit.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
