@@ -536,7 +536,7 @@ class PetWidget extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// NOUVELLE PAGE : MODE FOCUS (Chronomètre Plein Écran)
+// NOUVELLE PAGE : MODE FOCUS (Chronomètre Plein Écran) - DESIGN CORRIGÉ (CENTRÉ)
 // ---------------------------------------------------------------------------
 class FocusTimerPage extends StatefulWidget {
   final Habit habit;
@@ -559,10 +559,18 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
   @override
   void initState() {
     super.initState();
-    // On convertit les minutes (targetValue) en secondes
     _totalSeconds = widget.habit.targetValue * 60;
     _secondsRemaining = _totalSeconds;
     _startTimer();
+  }
+
+  String _getPetImagePath() {
+    String activeSkin = widget.db.itemActive;
+    int score = widget.db.userScore;
+    String imagePrefix = activeSkin != 'default' ? activeSkin : "pet";
+    if (score < 50) return 'assets/images/${imagePrefix}_egg.png';
+    if (score < 100) return 'assets/images/${imagePrefix}_baby.png';
+    return 'assets/images/${imagePrefix}_adult.png';
   }
 
   void _startTimer() {
@@ -581,11 +589,7 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
     _timer.cancel();
     _isRunning = false;
     _isFinished = true;
-    
-    // On valide l'habitude dans la base de données
     widget.db.completeHabit(widget.habit);
-    
-    // Fête !
     _confettiController.play();
     SoundManager.play('success.mp3');
   }
@@ -606,94 +610,124 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.deepPurple, // Fond immersif
+      backgroundColor: Colors.deepPurple,
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // Contenu principal
           SafeArea(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 1. EN-TÊTE
+                // 1. EN-TÊTE (TITRE)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
                   child: Text(
                     widget.habit.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ),
 
-                // 2. LE GROS CHRONO CENTRAL
-                Column(
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 250,
-                          height: 250,
-                          child: CircularProgressIndicator(
-                            value: _isFinished ? 1 : 1 - (_secondsRemaining / _totalSeconds),
-                            strokeWidth: 15,
-                            backgroundColor: Colors.white24,
-                            color: _isFinished ? Colors.green : Colors.amber,
+                // Le premier Spacer pousse tout ce qui suit vers le bas
+                const Spacer(),
+
+                // 2. ZONE CENTRALE (C'est ici que ça sera parfaitement centré)
+                Center(
+                  child: _isFinished
+                      ? FadeInUp(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min, // Important pour le centrage
+                            children: [
+                              Image.asset(
+                                _getPetImagePath(),
+                                height: 180,
+                                fit: BoxFit.contain,
+                                errorBuilder: (c, e, s) => const Icon(Icons.emoji_events, size: 150, color: Colors.amber),
+                              ),
+                              const SizedBox(height: 30),
+                              const Text(
+                                "BRAVO ! 🎉",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                "Tu as assuré !",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 20),
+                              ),
+                            ],
                           ),
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 250,
+                                  height: 250,
+                                  child: CircularProgressIndicator(
+                                    value: 1 - (_secondsRemaining / _totalSeconds),
+                                    strokeWidth: 15,
+                                    backgroundColor: Colors.white24,
+                                    color: Colors.amber,
+                                  ),
+                                ),
+                                Text(
+                                  _formatTime(_secondsRemaining),
+                                  style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 30),
+                            Text(
+                              _isRunning ? "Focus en cours..." : "Pause",
+                              style: const TextStyle(color: Colors.white70, fontSize: 18),
+                            ),
+                          ],
                         ),
-                        Text(
-                          _isFinished ? "BRAVO !" : _formatTime(_secondsRemaining),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Courier',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 30),
-                    if (!_isFinished)
-                      Text(
-                        _isRunning ? "Focus en cours..." : "Pause",
-                        style: const TextStyle(color: Colors.white70, fontSize: 18),
-                      ),
-                  ],
                 ),
 
-                // 3. BOUTONS DE CONTRÔLE
+                // Le deuxième Spacer pousse tout ce qui précède vers le haut (équilibre parfait)
+                const Spacer(),
+
+                // 3. BOUTONS DU BAS
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 50),
+                  padding: const EdgeInsets.only(bottom: 40, left: 20, right: 20),
                   child: _isFinished
-                      ? ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.deepPurple,
-                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                      ? FadeInUp(
+                          delay: const Duration(milliseconds: 500),
+                          child: SizedBox(
+                            width: double.infinity, // Bouton large pour bien cadrer
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                elevation: 8,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.check_circle, size: 28),
+                              label: const Text("Récupérer ma récompense"),
+                            ),
                           ),
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.check),
-                          label: const Text("Récupérer ma récompense"),
                         )
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Bouton Abandonner
                             TextButton(
                               onPressed: () => Navigator.pop(context),
                               child: const Text("Abandonner", style: TextStyle(color: Colors.white54)),
                             ),
                             const SizedBox(width: 20),
-                            // Bouton Pause/Play
                             FloatingActionButton.large(
                               backgroundColor: Colors.amber,
                               onPressed: () {
                                 setState(() {
                                   _isRunning = !_isRunning;
-                                  if (_isRunning) {
-                                    _startTimer();
-                                  } else {
-                                    _timer.cancel();
-                                  }
+                                  if (_isRunning) _startTimer(); else _timer.cancel();
                                 });
                               },
                               child: Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 40, color: Colors.deepPurple),
@@ -705,7 +739,6 @@ class _FocusTimerPageState extends State<FocusTimerPage> {
             ),
           ),
           
-          // Confettis par dessus tout
           ConfettiWidget(
             confettiController: _confettiController,
             blastDirectionality: BlastDirectionality.explosive,
