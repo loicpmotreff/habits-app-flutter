@@ -24,14 +24,22 @@ class HabitAdapter extends TypeAdapter<Habit> {
       streak: fields[4] as int,
       activeDays: (fields[5] as List).cast<int>(),
       completedDays: (fields[6] as List).cast<DateTime>(),
-      difficulty: fields[7] as HabitDifficulty,
+      difficulty: fields[7] == null
+          ? HabitDifficulty.medium
+          : fields[7] as HabitDifficulty,
+      category:
+          fields[8] == null ? HabitCategory.other : fields[8] as HabitCategory,
+      targetValue: fields[9] == null ? 1 : fields[9] as int,
+      currentValue: fields[10] == null ? 0 : fields[10] as int,
+      unit: fields[11] == null ? '' : fields[11] as String,
+      isTimer: fields[12] == null ? false : fields[12] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Habit obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +55,17 @@ class HabitAdapter extends TypeAdapter<Habit> {
       ..writeByte(6)
       ..write(obj.completedDays)
       ..writeByte(7)
-      ..write(obj.difficulty);
+      ..write(obj.difficulty)
+      ..writeByte(8)
+      ..write(obj.category)
+      ..writeByte(9)
+      ..write(obj.targetValue)
+      ..writeByte(10)
+      ..write(obj.currentValue)
+      ..writeByte(11)
+      ..write(obj.unit)
+      ..writeByte(12)
+      ..write(obj.isTimer);
   }
 
   @override
@@ -101,6 +119,65 @@ class HabitDifficultyAdapter extends TypeAdapter<HabitDifficulty> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is HabitDifficultyAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class HabitCategoryAdapter extends TypeAdapter<HabitCategory> {
+  @override
+  final int typeId = 2;
+
+  @override
+  HabitCategory read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return HabitCategory.sport;
+      case 1:
+        return HabitCategory.work;
+      case 2:
+        return HabitCategory.health;
+      case 3:
+        return HabitCategory.art;
+      case 4:
+        return HabitCategory.social;
+      case 5:
+        return HabitCategory.other;
+      default:
+        return HabitCategory.sport;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, HabitCategory obj) {
+    switch (obj) {
+      case HabitCategory.sport:
+        writer.writeByte(0);
+        break;
+      case HabitCategory.work:
+        writer.writeByte(1);
+        break;
+      case HabitCategory.health:
+        writer.writeByte(2);
+        break;
+      case HabitCategory.art:
+        writer.writeByte(3);
+        break;
+      case HabitCategory.social:
+        writer.writeByte(4);
+        break;
+      case HabitCategory.other:
+        writer.writeByte(5);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HabitCategoryAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

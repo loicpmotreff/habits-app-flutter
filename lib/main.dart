@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:animate_do/animate_do.dart'; // Animations
-import 'package:confetti/confetti.dart';     // Confettis
-import 'dart:math';                          // Maths (pi)
+import 'package:animate_do/animate_do.dart';
+import 'package:confetti/confetti.dart';
+import 'dart:async'; // Pour le Timer
+import 'dart:math';
 
-// Nos fichiers
 import 'database/habit_database.dart';
-import 'models/habit.dart';   // Important pour HabitDifficulty
-import 'shop_page.dart';      // Boutique
-import 'inventory_page.dart'; // Inventaire
-import 'profile_page.dart';   // Profil (Heatmap)
-import 'sound_manager.dart';  // Gestionnaire de sons
+import 'models/habit.dart';
+import 'shop_page.dart';
+import 'inventory_page.dart';
+import 'profile_page.dart';
+import 'sound_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 1. Initialisation de la Base de Données
   final habitDb = HabitDatabase();
   await habitDb.init();
 
@@ -44,9 +42,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// ECRAN PRINCIPAL (Navigation en bas)
-// ---------------------------------------------------------------------------
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -56,12 +51,11 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-
   final List<Widget> _pages = [
-    const HabitPage(),      // Index 0 : Quêtes
-    const InventoryPage(),  // Index 1 : Sac
-    const ShopPage(),       // Index 2 : Boutique
-    const ProfilePage(),    // Index 3 : Profil
+    const HabitPage(),
+    const InventoryPage(),
+    const ShopPage(),
+    const ProfilePage(),
   ];
 
   @override
@@ -70,41 +64,18 @@ class _MainScreenState extends State<MainScreen> {
       body: _pages[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: (int index) => setState(() => _currentIndex = index),
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.check_circle_outline),
-            selectedIcon: Icon(Icons.check_circle, color: Colors.deepPurple),
-            label: 'Quêtes',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.backpack_outlined),
-            selectedIcon: Icon(Icons.backpack, color: Colors.deepPurple),
-            label: 'Sac',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront, color: Colors.deepPurple),
-            label: 'Boutique',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: Colors.deepPurple),
-            label: 'Profil',
-          ),
+          NavigationDestination(icon: Icon(Icons.check_circle_outline), selectedIcon: Icon(Icons.check_circle), label: 'Quêtes'),
+          NavigationDestination(icon: Icon(Icons.backpack_outlined), selectedIcon: Icon(Icons.backpack), label: 'Sac'),
+          NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Boutique'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// PAGE DES HABITUDES (Liste + Animal)
-// ---------------------------------------------------------------------------
 class HabitPage extends StatefulWidget {
   const HabitPage({super.key});
 
@@ -127,17 +98,27 @@ class _HabitPageState extends State<HabitPage> {
     super.dispose();
   }
 
-  // BOÎTE DE DIALOGUE (Création / Modification)
+  Map<String, dynamic> _getCategoryDetails(HabitCategory category) {
+    switch (category) {
+      case HabitCategory.sport: return {'icon': Icons.fitness_center, 'color': Colors.orange, 'label': 'Sport'};
+      case HabitCategory.work: return {'icon': Icons.work, 'color': Colors.blue, 'label': 'Travail'};
+      case HabitCategory.health: return {'icon': Icons.favorite, 'color': Colors.pink, 'label': 'Santé'};
+      case HabitCategory.art: return {'icon': Icons.palette, 'color': Colors.purple, 'label': 'Art'};
+      case HabitCategory.social: return {'icon': Icons.people, 'color': Colors.teal, 'label': 'Social'};
+      default: return {'icon': Icons.circle, 'color': Colors.grey, 'label': 'Autre'};
+    }
+  }
+
   void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
     final controller = TextEditingController(text: habitToEdit?.title ?? "");
-    
-    // Jours sélectionnés
-    List<int> selectedDays = habitToEdit != null 
-        ? List<int>.from(habitToEdit.activeDays) 
-        : [1, 2, 3, 4, 5, 6, 7]; 
-    
-    // Difficulté sélectionnée (Moyen par défaut)
+    List<int> selectedDays = habitToEdit != null ? List<int>.from(habitToEdit.activeDays) : [1, 2, 3, 4, 5, 6, 7];
     HabitDifficulty selectedDifficulty = habitToEdit?.difficulty ?? HabitDifficulty.medium;
+    HabitCategory selectedCategory = habitToEdit?.category ?? HabitCategory.other;
+    TextEditingController targetController = TextEditingController(text: (habitToEdit?.targetValue ?? 1).toString());
+    TextEditingController unitController = TextEditingController(text: habitToEdit?.unit ?? "");
+    
+    // NOUVEAU : Interrupteur Timer
+    bool isTimerMode = habitToEdit?.isTimer ?? false;
 
     showDialog(
       context: context,
@@ -145,110 +126,161 @@ class _HabitPageState extends State<HabitPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: Text(habitToEdit == null ? "Nouvelle quête 📜" : "Modifier la quête ✏️"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // CHAMP TITRE
-                  TextField(
-                    controller: controller,
-                    decoration: const InputDecoration(
-                      hintText: "Ex: Sport, Lecture...",
-                      border: OutlineInputBorder(),
-                    ),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 15),
+              title: Text(habitToEdit == null ? "Nouvelle quête" : "Modifier"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: controller, decoration: const InputDecoration(hintText: "Titre", border: OutlineInputBorder()), autofocus: true),
+                    const SizedBox(height: 15),
 
-                  // SÉLECTEUR DE DIFFICULTÉ (NOUVEAU)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Difficulté :", style: TextStyle(fontWeight: FontWeight.bold)),
-                      DropdownButton<HabitDifficulty>(
-                        value: selectedDifficulty,
-                        onChanged: (HabitDifficulty? newValue) {
-                          setState(() {
-                            selectedDifficulty = newValue!;
-                          });
-                        },
-                        items: const [
-                          DropdownMenuItem(value: HabitDifficulty.easy, child: Text("Facile (+5)")),
-                          DropdownMenuItem(value: HabitDifficulty.medium, child: Text("Moyen (+10)")),
-                          DropdownMenuItem(value: HabitDifficulty.hard, child: Text("Difficile (+20)")),
+                    // SWITCH TIMER
+                    // ... (Le début de la colonne avec le TextField titre reste pareil)
+
+                    const SizedBox(height: 10), // Un peu d'espace avant le bloc chrono
+
+                    // BLOC CHRONOMÈTRE
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withOpacity(0.05), // Fond très léger
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: const Text("Lancer un compte à rebours", style: TextStyle(fontSize: 12)),
+                            value: isTimerMode,
+                            activeColor: Colors.deepPurple,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10), // Réduit les marges internes
+                            onChanged: (val) {
+                              setState(() {
+                                isTimerMode = val;
+                                if (isTimerMode && unitController.text.isEmpty) {
+                                  unitController.text = "min";
+                                }
+                              });
+                            },
+                          ),
+                          
+                          // LA SÉPARATION QUE TU VOULAIS
+                          if (isTimerMode) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Divider(height: 1), // Ligne fine
+                            ),
+                            const SizedBox(height: 15), // Espace aéré
+                          ],
                         ],
                       ),
-                    ],
-                  ),
+                    ),
 
-                  const SizedBox(height: 15),
-                  const Text("Jours actifs :", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  
-                  // SÉLECTEUR DE JOURS
-                  Wrap(
-                    spacing: 5,
-                    children: List.generate(7, (index) {
-                      int dayId = index + 1;
-                      List<String> daysLabels = ["L", "M", "M", "J", "V", "S", "D"];
-                      bool isSelected = selectedDays.contains(dayId);
-                      
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              if (selectedDays.length > 1) selectedDays.remove(dayId);
-                            } else {
-                              selectedDays.add(dayId);
-                            }
-                          });
-                        },
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: isSelected ? Colors.deepPurple : Colors.grey[200],
-                          child: Text(
-                            daysLabels[index],
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.black,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                    const SizedBox(height: 15), // Espace entre le bloc chrono et les champs
+
+                    // LES CHAMPS DE SAISIE (Objectif / Unité)
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: targetController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: isTimerMode ? "Durée" : "Objectif",
+                              helperText: isTimerMode ? "en minutes" : "ex: 5", // Aide visuelle en dessous
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
                             ),
                           ),
                         ),
-                      );
-                    }),
-                  )
-                ],
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: unitController,
+                            enabled: !isTimerMode,
+                            decoration: InputDecoration(
+                              labelText: "Unité",
+                              helperText: isTimerMode ? "Auto" : "ex: verres", // Aide visuelle
+                              hintText: isTimerMode ? "minutes" : "fois",
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 20), // Espace avant les boutons de difficulté
+
+                    // ... (La suite avec DropdownButton reste pareil)
+                    
+                    // Sélecteurs (Difficulty, Category, Days) - Version compacte pour gagner de la place
+                    DropdownButton<HabitDifficulty>(
+                      value: selectedDifficulty,
+                      isExpanded: true,
+                      onChanged: (val) => setState(() => selectedDifficulty = val!),
+                      items: const [
+                        DropdownMenuItem(value: HabitDifficulty.easy, child: Text("Facile (+5)")),
+                        DropdownMenuItem(value: HabitDifficulty.medium, child: Text("Moyen (+10)")),
+                        DropdownMenuItem(value: HabitDifficulty.hard, child: Text("Difficile (+20)")),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: HabitCategory.values.map((cat) {
+                          final details = _getCategoryDetails(cat);
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 5),
+                            child: ChoiceChip(
+                              label: Text(details['label'], style: const TextStyle(fontSize: 11)),
+                              avatar: Icon(details['icon'], size: 14, color: selectedCategory == cat ? Colors.white : details['color']),
+                              selected: selectedCategory == cat,
+                              selectedColor: details['color'],
+                              onSelected: (selected) { if (selected) setState(() => selectedCategory = cat); },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 15),
+                    Wrap(
+                      spacing: 5,
+                      children: List.generate(7, (index) {
+                        int dayId = index + 1;
+                        List<String> dl = ["L", "M", "M", "J", "V", "S", "D"];
+                        bool isSel = selectedDays.contains(dayId);
+                        return GestureDetector(
+                          onTap: () => setState(() => isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId)),
+                          child: CircleAvatar(radius: 14, backgroundColor: isSel ? Colors.deepPurple : Colors.grey[200], child: Text(dl[index], style: TextStyle(color: isSel ? Colors.white : Colors.black, fontSize: 10))),
+                        );
+                      }),
+                    )
+                  ],
+                ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Annuler"),
-                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {
+                      int target = int.tryParse(targetController.text) ?? 1;
+                      if (target < 1) target = 1;
+                      String unit = isTimerMode ? "min" : unitController.text.trim();
+
                       if (habitToEdit == null) {
-                        // CRÉATION
-                        context.read<HabitDatabase>().addHabit(
-                          controller.text, 
-                          selectedDays, 
-                          selectedDifficulty // On passe la difficulté
-                        );
+                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode);
                       } else {
-                        // MODIFICATION
-                        context.read<HabitDatabase>().updateHabit(
-                          habitToEdit.id, 
-                          controller.text, 
-                          selectedDays,
-                          selectedDifficulty // On passe la difficulté
-                        );
+                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode);
                       }
                       Navigator.pop(context);
                     }
                   },
-                  child: Text(habitToEdit == null ? "Créer" : "Sauvegarder"),
+                  child: const Text("Sauvegarder"),
                 ),
               ],
             );
@@ -271,29 +303,20 @@ class _HabitPageState extends State<HabitPage> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               title: Consumer<HabitDatabase>(
-                builder: (context, db, child) {
-                  return FadeInDown(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.stars, color: Colors.amber, size: 28),
-                          const SizedBox(width: 10),
-                          Text(
-                            "${db.userScore} Pièces",
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
-                          ),
-                        ],
-                      ),
+                builder: (context, db, child) => FadeInDown(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.stars, color: Colors.amber, size: 28),
+                        const SizedBox(width: 10),
+                        Text("${db.userScore}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
               centerTitle: true,
             ),
@@ -301,138 +324,30 @@ class _HabitPageState extends State<HabitPage> {
               onPressed: () => _showHabitDialog(context),
               backgroundColor: Colors.deepPurple,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text("Nouvelle Quête", style: TextStyle(color: Colors.white)),
+              label: const Text("Quête", style: TextStyle(color: Colors.white)),
             ),
             body: Consumer<HabitDatabase>(
               builder: (context, db, child) {
                 return Column(
                   children: [
-                    // --- ANIMAL ---
-                    ElasticIn(
-                      duration: const Duration(seconds: 2),
-                      child: PetWidget(
-                        score: db.userScore,
-                        activeSkin: db.itemActive,
-                      ),
-                    ),
-
-                    // --- LISTE DES TÂCHES ---
+                    ElasticIn(child: PetWidget(score: db.userScore, activeSkin: db.itemActive)),
                     Expanded(
                       child: db.habits.isEmpty
-                          ? Center(
-                              child: FadeInUp(
-                                child: const Text(
-                                  "Aucune quête aujourd'hui...\nProfite ou ajoute-en une !",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              ),
-                            )
+                          ? Center(child: FadeInUp(child: const Text("Aucune quête aujourd'hui...", style: TextStyle(color: Colors.grey))))
                           : ListView.builder(
                               itemCount: db.habits.length,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                               itemBuilder: (context, index) {
                                 final habit = db.habits[index];
-                                
-                                // LOGIQUE D'AFFICHAGE SELON DIFFICULTÉ
-                                Color difficultyColor;
-                                String rewardText;
-                                switch (habit.difficulty) {
-                                  case HabitDifficulty.easy:
-                                    difficultyColor = Colors.blue.shade300;
-                                    rewardText = "+5";
-                                    break;
-                                  case HabitDifficulty.medium:
-                                    difficultyColor = Colors.purple.shade300;
-                                    rewardText = "+10";
-                                    break;
-                                  case HabitDifficulty.hard:
-                                    difficultyColor = Colors.red.shade300;
-                                    rewardText = "+20";
-                                    break;
-                                }
-                                
                                 return FadeInLeft(
                                   duration: const Duration(milliseconds: 500),
                                   delay: Duration(milliseconds: index * 100),
-                                  child: Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(15),
-                                      // Bordure colorée à gauche pour indiquer la difficulté
-                                      border: Border(left: BorderSide(color: difficultyColor, width: 6)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.grey.withOpacity(0.1),
-                                          blurRadius: 5,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                      
-                                      // Titre (cliquable pour modifier)
-                                      title: GestureDetector(
-                                        onTap: () => _showHabitDialog(context, habitToEdit: habit),
-                                        child: Text(
-                                          habit.title,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            decoration: habit.isCompletedToday ? TextDecoration.lineThrough : null,
-                                            color: habit.isCompletedToday ? Colors.grey[400] : Colors.black87,
-                                          ),
-                                        ),
-                                      ),
-                                      
-                                      // Case à cocher
-                                      leading: Transform.scale(
-                                        scale: 1.2,
-                                        child: Checkbox(
-                                          value: habit.isCompletedToday,
-                                          activeColor: Colors.green,
-                                          shape: const CircleBorder(),
-                                          onChanged: (val) {
-                                            db.toggleHabit(habit);
-                                            if (val == true) {
-                                              _confettiController.play();
-                                              SoundManager.play('success.mp3'); // SON DE SUCCÈS
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      
-                                      // Sous-titre (Streak + Récompense)
-                                      subtitle: Row(
-                                        children: [
-                                          if (habit.streak > 0) ...[
-                                            const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
-                                            Text(" ${habit.streak} j  ", style: TextStyle(color: Colors.orange[700], fontWeight: FontWeight.bold)),
-                                            const SizedBox(width: 8),
-                                          ],
-                                          // Badge de récompense
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.amber.shade100,
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              "$rewardText 🪙", 
-                                              style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold)
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      
-                                      // Bouton supprimer
-                                      trailing: IconButton(
-                                        icon: Icon(Icons.delete_outline, color: Colors.grey[300]),
-                                        onPressed: () => db.deleteHabit(habit),
-                                      ),
-                                    ),
+                                  // ICI : ON UTILISE NOTRE NOUVEAU WIDGET "HabitTile"
+                                  child: HabitTile(
+                                    habit: habit, 
+                                    db: db, 
+                                    onEdit: () => _showHabitDialog(context, habitToEdit: habit),
+                                    confettiController: _confettiController,
                                   ),
                                 );
                               },
@@ -443,16 +358,10 @@ class _HabitPageState extends State<HabitPage> {
               },
             ),
           ),
-
-          // --- CONFETTIS ---
           ConfettiWidget(
             confettiController: _confettiController,
             blastDirection: pi / 2,
-            maxBlastForce: 5,
-            minBlastForce: 2,
-            emissionFrequency: 0.05,
             numberOfParticles: 20,
-            gravity: 0.2,
             colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
           ),
         ],
@@ -462,76 +371,346 @@ class _HabitPageState extends State<HabitPage> {
 }
 
 // ---------------------------------------------------------------------------
-// WIDGET ANIMAL (Pet)
+// NOUVEAU WIDGET : GÈRE L'AFFICHAGE ET LE TIMER DE CHAQUE HABITUDE
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// WIDGET HABIT TILE (Version Simplifiée qui ouvre le Focus Mode)
+// ---------------------------------------------------------------------------
+class HabitTile extends StatelessWidget {
+  final Habit habit;
+  final HabitDatabase db;
+  final VoidCallback onEdit;
+  final ConfettiController confettiController; // On le garde pour les checkboxes simples
+
+  const HabitTile({super.key, required this.habit, required this.db, required this.onEdit, required this.confettiController});
+
+  @override
+  Widget build(BuildContext context) {
+    // Détails visuels (Couleurs/Icones)
+    Map<String, dynamic> details;
+    switch (habit.category) {
+      case HabitCategory.sport: details = {'icon': Icons.fitness_center, 'color': Colors.orange}; break;
+      case HabitCategory.work: details = {'icon': Icons.work, 'color': Colors.blue}; break;
+      case HabitCategory.health: details = {'icon': Icons.favorite, 'color': Colors.pink}; break;
+      case HabitCategory.art: details = {'icon': Icons.palette, 'color': Colors.purple}; break;
+      case HabitCategory.social: details = {'icon': Icons.people, 'color': Colors.teal}; break;
+      default: details = {'icon': Icons.circle, 'color': Colors.grey}; break;
+    }
+
+    bool isCounter = habit.targetValue > 1 && !habit.isTimer;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border(left: BorderSide(color: details['color'], width: 6)),
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 4))],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        
+        // --- GAUCHE : CHECKBOX OU PLAY ---
+        leading: habit.isTimer
+            ? IconButton(
+                icon: Icon(
+                  habit.isCompletedToday ? Icons.check_circle : Icons.play_circle_fill,
+                  color: habit.isCompletedToday ? Colors.green : details['color'],
+                  size: 34,
+                ),
+                onPressed: () {
+                  if (!habit.isCompletedToday) {
+                    // C'EST ICI QU'ON OUVRE LA NOUVELLE PAGE FOCUS
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FocusTimerPage(habit: habit, db: db),
+                      ),
+                    );
+                  }
+                },
+              )
+            : (!isCounter
+                ? Transform.scale(
+                    scale: 1.2,
+                    child: Checkbox(
+                      value: habit.isCompletedToday,
+                      activeColor: details['color'],
+                      shape: const CircleBorder(),
+                      onChanged: (val) {
+                        int change = val == true ? 1 : -1;
+                        db.updateProgress(habit, change);
+                        if (val == true) {
+                          confettiController.play();
+                          SoundManager.play('success.mp3');
+                        }
+                      },
+                    ),
+                  )
+                : null),
+
+        // --- CENTRE : TITRE ---
+        title: GestureDetector(
+          onTap: onEdit,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                habit.title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  decoration: habit.isCompletedToday ? TextDecoration.lineThrough : null,
+                  color: habit.isCompletedToday ? Colors.grey[400] : Colors.black87,
+                ),
+              ),
+              // Sous-titre conditionnel
+              if (habit.isTimer)
+                Text(
+                   habit.isCompletedToday ? "Terminé !" : "${habit.targetValue} min",
+                   style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                )
+              else if (habit.streak > 0)
+                 Row(children: [
+                    const Icon(Icons.local_fire_department, color: Colors.orange, size: 14),
+                    Text(" ${habit.streak} j", style: TextStyle(color: Colors.orange[700], fontSize: 12)),
+                 ]),
+            ],
+          ),
+        ),
+
+        // --- DROITE : COMPTEUR OU SUPPRESSION ---
+        // On a enlevé le chrono d'ici pour éviter l'erreur OVERFLOW
+        trailing: isCounter
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: () => db.updateProgress(habit, -1),
+                  ),
+                  Text("${habit.currentValue}/${habit.targetValue} ${habit.unit}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: Icon(Icons.add_circle, color: details['color']),
+                    onPressed: () {
+                      db.updateProgress(habit, 1);
+                      if (habit.currentValue + 1 >= habit.targetValue && !habit.isCompletedToday) {
+                         confettiController.play();
+                         SoundManager.play('success.mp3');
+                      }
+                    },
+                  ),
+                ],
+              )
+            : IconButton(
+                icon: Icon(Icons.delete_outline, color: Colors.grey[300]),
+                onPressed: () => db.deleteHabit(habit),
+              ),
+      ),
+    );
+  }
+}
 class PetWidget extends StatelessWidget {
   final int score;
   final String activeSkin;
-
   const PetWidget({super.key, required this.score, required this.activeSkin});
 
   @override
   Widget build(BuildContext context) {
-    String imagePrefix = "pet";
-    if (activeSkin != 'default') {
-      imagePrefix = activeSkin;
-    }
-
-    String imagePath;
-    String statusText;
-    // Niveaux d'évolution
-    if (score < 50) {
-      imagePath = 'assets/images/${imagePrefix}_egg.png';
-      statusText = "Stade : Œuf (Encore ${50 - score} pièces)";
-    } else if (score < 100) {
-      imagePath = 'assets/images/${imagePrefix}_baby.png';
-      statusText = "Stade : Bébé (Encore ${100 - score} pièces)";
-    } else {
-      imagePath = 'assets/images/${imagePrefix}_adult.png';
-      statusText = "Stade : Adulte (Max !)";
-    }
-
+    String imagePrefix = activeSkin != 'default' ? activeSkin : "pet";
+    String imagePath = score < 50 ? 'assets/images/${imagePrefix}_egg.png' : (score < 100 ? 'assets/images/${imagePrefix}_baby.png' : 'assets/images/${imagePrefix}_adult.png');
+    
     return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 10)]),
       child: Column(
         children: [
-          Image.asset(
-            imagePath,
-            height: 150,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return const Icon(Icons.pets, size: 100, color: Colors.grey);
-            },
-          ),
+          Image.asset(imagePath, height: 120, fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.pets, size: 80, color: Colors.grey)),
           const SizedBox(height: 10),
-          Text(
-            statusText,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.deepPurple,
+          LinearProgressIndicator(value: (score >= 100) ? 1.0 : (score % 50) / 50, backgroundColor: Colors.grey[200], color: Colors.orange, minHeight: 6, borderRadius: BorderRadius.circular(10)),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// NOUVELLE PAGE : MODE FOCUS (Chronomètre Plein Écran)
+// ---------------------------------------------------------------------------
+class FocusTimerPage extends StatefulWidget {
+  final Habit habit;
+  final HabitDatabase db;
+
+  const FocusTimerPage({super.key, required this.habit, required this.db});
+
+  @override
+  State<FocusTimerPage> createState() => _FocusTimerPageState();
+}
+
+class _FocusTimerPageState extends State<FocusTimerPage> {
+  late Timer _timer;
+  late int _secondsRemaining;
+  late int _totalSeconds;
+  bool _isRunning = true;
+  bool _isFinished = false;
+  final ConfettiController _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+
+  @override
+  void initState() {
+    super.initState();
+    // On convertit les minutes (targetValue) en secondes
+    _totalSeconds = widget.habit.targetValue * 60;
+    _secondsRemaining = _totalSeconds;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_secondsRemaining > 0) {
+          _secondsRemaining--;
+        } else {
+          _finishTimer();
+        }
+      });
+    });
+  }
+
+  void _finishTimer() {
+    _timer.cancel();
+    _isRunning = false;
+    _isFinished = true;
+    
+    // On valide l'habitude dans la base de données
+    widget.db.completeHabit(widget.habit);
+    
+    // Fête !
+    _confettiController.play();
+    SoundManager.play('success.mp3');
+  }
+
+  @override
+  void dispose() {
+    if (_timer.isActive) _timer.cancel();
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  String _formatTime(int totalSeconds) {
+    int min = totalSeconds ~/ 60;
+    int sec = totalSeconds % 60;
+    return "${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.deepPurple, // Fond immersif
+      body: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Contenu principal
+          SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // 1. EN-TÊTE
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Text(
+                    widget.habit.title,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+                // 2. LE GROS CHRONO CENTRAL
+                Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 250,
+                          height: 250,
+                          child: CircularProgressIndicator(
+                            value: _isFinished ? 1 : 1 - (_secondsRemaining / _totalSeconds),
+                            strokeWidth: 15,
+                            backgroundColor: Colors.white24,
+                            color: _isFinished ? Colors.green : Colors.amber,
+                          ),
+                        ),
+                        Text(
+                          _isFinished ? "BRAVO !" : _formatTime(_secondsRemaining),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Courier',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+                    if (!_isFinished)
+                      Text(
+                        _isRunning ? "Focus en cours..." : "Pause",
+                        style: const TextStyle(color: Colors.white70, fontSize: 18),
+                      ),
+                  ],
+                ),
+
+                // 3. BOUTONS DE CONTRÔLE
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 50),
+                  child: _isFinished
+                      ? ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.deepPurple,
+                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.check),
+                          label: const Text("Récupérer ma récompense"),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Bouton Abandonner
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("Abandonner", style: TextStyle(color: Colors.white54)),
+                            ),
+                            const SizedBox(width: 20),
+                            // Bouton Pause/Play
+                            FloatingActionButton.large(
+                              backgroundColor: Colors.amber,
+                              onPressed: () {
+                                setState(() {
+                                  _isRunning = !_isRunning;
+                                  if (_isRunning) {
+                                    _startTimer();
+                                  } else {
+                                    _timer.cancel();
+                                  }
+                                });
+                              },
+                              child: Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 40, color: Colors.deepPurple),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 10),
-          LinearProgressIndicator(
-            value: (score >= 100) ? 1.0 : (score % 50) / 50,
-            backgroundColor: Colors.grey[200],
-            color: Colors.orange,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(10),
+          
+          // Confettis par dessus tout
+          ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            numberOfParticles: 50,
+            colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
           ),
         ],
       ),

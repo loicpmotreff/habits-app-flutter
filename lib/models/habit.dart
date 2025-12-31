@@ -2,15 +2,21 @@ import 'package:hive/hive.dart';
 
 part 'habit.g.dart';
 
-// 1. On définit les niveaux de difficulté
-@HiveType(typeId: 1) // Attention : typeId différent de Habit (qui est 0)
+@HiveType(typeId: 1)
 enum HabitDifficulty {
-  @HiveField(0)
-  easy,
-  @HiveField(1)
-  medium,
-  @HiveField(2)
-  hard,
+  @HiveField(0) easy,
+  @HiveField(1) medium,
+  @HiveField(2) hard,
+}
+
+@HiveType(typeId: 2)
+enum HabitCategory {
+  @HiveField(0) sport,
+  @HiveField(1) work,
+  @HiveField(2) health,
+  @HiveField(3) art,
+  @HiveField(4) social,
+  @HiveField(5) other,
 }
 
 @HiveType(typeId: 0)
@@ -36,8 +42,24 @@ class Habit extends HiveObject {
   @HiveField(6)
   List<DateTime> completedDays;
 
-  @HiveField(7) // NOUVEAU CHAMPS
+  @HiveField(7, defaultValue: HabitDifficulty.medium)
   HabitDifficulty difficulty;
+
+  @HiveField(8, defaultValue: HabitCategory.other)
+  HabitCategory category;
+
+  @HiveField(9, defaultValue: 1)
+  int targetValue; // Si Timer = Durée en minutes. Si Compteur = Objectif.
+
+  @HiveField(10, defaultValue: 0)
+  int currentValue;
+
+  @HiveField(11, defaultValue: '') 
+  String unit;
+
+  // --- NOUVEAU CHAMP ---
+  @HiveField(12, defaultValue: false)
+  bool isTimer; // Est-ce un chronomètre ?
 
   Habit({
     required this.id,
@@ -47,6 +69,11 @@ class Habit extends HiveObject {
     this.streak = 0,
     required this.activeDays,
     this.completedDays = const [],
-    this.difficulty = HabitDifficulty.medium, // Par défaut "Moyen"
+    this.difficulty = HabitDifficulty.medium,
+    this.category = HabitCategory.other,
+    this.targetValue = 1,
+    this.currentValue = 0,
+    this.unit = '',
+    this.isTimer = false, // Par défaut non
   });
 }

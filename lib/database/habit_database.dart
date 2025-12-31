@@ -8,39 +8,26 @@ class HabitDatabase extends ChangeNotifier {
 
   List<Habit> habits = [];
   int userScore = 0;
-
-  // Inventaire
   List<String> inventory = [];
   String itemActive = 'default';
 
   Future<void> init() async {
     await Hive.initFlutter();
-    // On enregistre les deux adaptateurs
     Hive.registerAdapter(HabitAdapter());
-    Hive.registerAdapter(HabitDifficultyAdapter()); // Pour gérer la difficulté
+    Hive.registerAdapter(HabitDifficultyAdapter());
+    Hive.registerAdapter(HabitCategoryAdapter());
 
-    // SÉCURITÉ : Si la base de données est incompatible, on réinitialise
     try {
       await Hive.openBox<Habit>(boxName);
     } catch (e) {
-      print("Erreur détectée : Reset de la base...");
       await Hive.deleteBoxFromDisk(boxName);
       await Hive.openBox<Habit>(boxName);
     }
 
     var settingsBox = await Hive.openBox(settingsBoxName);
-
-    // Chargement sécurisé du score
     userScore = (settingsBox.get('score') ?? 0) as int;
-
-    // Chargement sécurisé de l'inventaire
     var rawInventory = settingsBox.get('inventory');
-    if (rawInventory != null) {
-      inventory = List<String>.from(rawInventory);
-    } else {
-      inventory = [];
-    }
-
+    inventory = rawInventory != null ? List<String>.from(rawInventory) : [];
     itemActive = settingsBox.get('itemActive', defaultValue: 'default');
 
     loadHabits();
@@ -51,110 +38,131 @@ class HabitDatabase extends ChangeNotifier {
     final allHabits = box.values.toList();
     final now = DateTime.now();
 
-    // 1. Reset si ce n'est plus le même jour
     for (var habit in allHabits) {
       if (habit.lastCompletedDate != null) {
         bool isSameDay = habit.lastCompletedDate!.year == now.year &&
             habit.lastCompletedDate!.month == now.month &&
             habit.lastCompletedDate!.day == now.day;
+        
         if (!isSameDay) {
           habit.isCompletedToday = false;
+          habit.currentValue = 0;
           habit.save();
         }
       }
     }
-
-    // 2. FILTRE : On ne garde que les habitudes prévues pour AUJOURD'HUI
-    habits = allHabits.where((habit) {
-      return habit.activeDays.contains(now.weekday);
-    }).toList();
-
+    habits = allHabits.where((habit) => habit.activeDays.contains(now.weekday)).toList();
     notifyListeners();
   }
 
-  // AJOUTER UNE HABITUDE (Avec la difficulté)
-  void addHabit(String title, List<int> days, HabitDifficulty difficulty) {
+  // AJOUTER (Avec isTimer)
+  void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer) {
     final newHabit = Habit(
       id: DateTime.now().toString(),
       title: title,
       streak: 0,
       activeDays: days,
       completedDays: [],
-      difficulty: difficulty, // On stocke la difficulté choisie
+      difficulty: difficulty,
+      category: category,
+      targetValue: targetValue,
+      currentValue: 0,
+      unit: unit,
+      isTimer: isTimer, // <--- NOUVEAU
     );
     final box = Hive.box<Habit>(boxName);
     box.add(newHabit);
     loadHabits();
   }
 
-  // MODIFIER UNE HABITUDE (Avec la difficulté)
-  void updateHabit(String id, String newTitle, List<int> newDays, HabitDifficulty newDifficulty) {
+  // MODIFIER (Avec isTimer)
+  void updateHabit(String id, String newTitle, List<int> newDays, HabitDifficulty newDifficulty, HabitCategory newCategory, int newTargetValue, String newUnit, bool isTimer) {
     final habitIndex = habits.indexWhere((h) => h.id == id);
     if (habitIndex != -1) {
       final habit = habits[habitIndex];
       habit.title = newTitle;
       habit.activeDays = newDays;
-      habit.difficulty = newDifficulty; // Mise à jour de la difficulté
+      habit.difficulty = newDifficulty;
+      habit.category = newCategory;
+      habit.targetValue = newTargetValue;
+      habit.unit = newUnit;
+      habit.isTimer = isTimer; // <--- UPDATE
       habit.save();
       loadHabits();
     }
   }
 
-  // COCHER / DÉCOCHER (Avec calcul intelligent des gains)
-  void toggleHabit(Habit habit) {
+  void updateProgress(Habit habit, int change) {
     final today = DateTime.now();
     final todayNormalized = DateTime(today.year, today.month, today.day);
 
-    habit.isCompletedToday = !habit.isCompletedToday;
+    // Si c'est un timer, targetValue est en minutes, mais on gère la validation directement.
+    // Cette fonction sert surtout pour les compteurs et checkboxes.
+    
+    int newValue = habit.currentValue + change;
+    if (newValue < 0) newValue = 0;
+    // Note : Pour le timer, on ne bloque pas newValue ici car on s'en sert différemment
+    if (!habit.isTimer && newValue > habit.targetValue) newValue = habit.targetValue;
+    
+    habit.currentValue = newValue;
+    
+    // Logique de complétion
+    bool isNowCompleted;
+    if (habit.isTimer) {
+      // Pour le timer, c'est l'UI qui dira "C'est fini" en appelant cette fonction avec une valeur spéciale ou manuellement
+      // Ici on simplifie : si on appelle updateProgress sur un timer terminé, on considère que c'est bon
+      isNowCompleted = habit.currentValue >= 1; // 1 = Timer Fini
+    } else {
+      isNowCompleted = habit.currentValue >= habit.targetValue;
+    }
 
-    if (habit.isCompletedToday) {
-      // ✅ Si on coche : On gagne des pièces selon la difficulté
+    if (isNowCompleted && !habit.isCompletedToday) {
+      habit.isCompletedToday = true;
       habit.lastCompletedDate = DateTime.now();
       habit.streak++;
 
-      // CALCUL DU PRIX
-      int reward = 10; // Moyen
+      int reward = 10;
       if (habit.difficulty == HabitDifficulty.easy) reward = 5;
       if (habit.difficulty == HabitDifficulty.hard) reward = 20;
-
       updateScore(reward);
 
-      // On ajoute la date à l'historique
       if (!habit.completedDays.contains(todayNormalized)) {
         habit.completedDays.add(todayNormalized);
       }
-    } else {
-      // ❌ Si on décoche : On perd l'argent
+    } 
+    else if (!isNowCompleted && habit.isCompletedToday) {
+      habit.isCompletedToday = false;
       habit.streak = (habit.streak > 0) ? habit.streak - 1 : 0;
 
       int penalty = 10;
       if (habit.difficulty == HabitDifficulty.easy) penalty = 5;
       if (habit.difficulty == HabitDifficulty.hard) penalty = 20;
-
       updateScore(-penalty);
 
-      // C'EST ICI QUE C'ÉTAIT CASSÉ : On retire la date d'aujourd'hui
-      habit.completedDays.removeWhere((date) =>
-        date.year == today.year &&
-        date.month == today.month &&
-        date.day == today.day
+      habit.completedDays.removeWhere((date) => 
+        date.year == today.year && date.month == today.month && date.day == today.day
       );
     }
-
     habit.save();
     notifyListeners();
   }
 
-  // GESTION SCORE & BOUTIQUE
+  // --- Force la validation (Pour le Timer quand il arrive à 0) ---
+  void completeHabit(Habit habit) {
+    if (!habit.isCompletedToday) {
+      habit.currentValue = habit.targetValue; // On met au max visuellement
+      updateProgress(habit, 0); // Déclenche la logique de gain
+    }
+  }
+
   void updateScore(int amount) {
     userScore += amount;
     if (userScore < 0) userScore = 0;
     updateSettings();
   }
-
+  
   bool buyItem(String itemId, int price) {
     if (inventory.contains(itemId)) return true;
-
     if (userScore >= price) {
       userScore -= price;
       inventory.add(itemId);
