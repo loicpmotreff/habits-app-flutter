@@ -13,9 +13,23 @@ class HabitDatabase extends ChangeNotifier {
   int currentXP = 0;
   List<String> inventory = [];
   String itemActive = 'default';
+  bool isDarkMode = false;
   
-  // --- NOUVEAU : THÈME ---
-  bool isDarkMode = false; 
+  // --- NOUVEAU : BADGES ---
+  List<String> unlockedBadgeIds = []; // Liste des IDs débloqués
+
+  // LISTE DES BADGES POSSIBLES
+  final List<AppBadge> allBadges = [
+    AppBadge(id: 'first_step', title: 'Premier Pas', description: 'Valider une première habitude.', icon: Icons.directions_walk, color: Colors.green),
+    AppBadge(id: 'streak_3', title: 'Bon départ', description: 'Série de 3 jours.', icon: Icons.local_fire_department, color: Colors.orange),
+    AppBadge(id: 'streak_7', title: 'En feu !', description: 'Série de 7 jours.', icon: Icons.whatshot, color: Colors.deepOrange),
+    AppBadge(id: 'streak_30', title: 'Légende', description: 'Série de 30 jours.', icon: Icons.emoji_events, color: Colors.amber),
+    AppBadge(id: 'worker_10', title: 'Travailleur', description: '10 habitudes validées au total.', icon: Icons.fitness_center, color: Colors.blue),
+    AppBadge(id: 'worker_50', title: 'Machine', description: '50 habitudes validées au total.', icon: Icons.precision_manufacturing, color: Colors.purple),
+    AppBadge(id: 'level_5', title: 'Apprenti', description: 'Atteindre le niveau 5.', icon: Icons.school, color: Colors.teal),
+    AppBadge(id: 'level_10', title: 'Expert', description: 'Atteindre le niveau 10.', icon: Icons.psychology, color: Colors.indigo),
+    AppBadge(id: 'joker_use', title: 'Relax', description: 'Utiliser un joker pour la première fois.', icon: Icons.beach_access, color: Colors.cyan),
+  ];
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -36,9 +50,10 @@ class HabitDatabase extends ChangeNotifier {
     currentXP = (settingsBox.get('xp') ?? 0) as int;
     inventory = (settingsBox.get('inventory') != null) ? List<String>.from(settingsBox.get('inventory')) : [];
     itemActive = settingsBox.get('itemActive', defaultValue: 'default');
-    
-    // Charger le thème
     isDarkMode = settingsBox.get('isDarkMode', defaultValue: false);
+    
+    // Charger les badges
+    unlockedBadgeIds = (settingsBox.get('badges') != null) ? List<String>.from(settingsBox.get('badges')) : [];
 
     loadHabits();
   }
@@ -46,7 +61,7 @@ class HabitDatabase extends ChangeNotifier {
   void toggleTheme() {
     isDarkMode = !isDarkMode;
     updateSettings();
-    notifyListeners(); // Dit à l'app de se redessiner
+    notifyListeners();
   }
 
   void loadHabits() {
@@ -106,6 +121,8 @@ class HabitDatabase extends ChangeNotifier {
       if (habit.isCompletedToday && !habit.isNegative) {
         updateProgress(habit, -habit.currentValue);
       }
+      // CHECK BADGE JOKER
+      checkAchievements(); 
     }
     habit.save();
     notifyListeners();
@@ -125,8 +142,87 @@ class HabitDatabase extends ChangeNotifier {
       currentXP += xpRequiredForNextLevel;
     }
     if (userLevel == 1 && currentXP < 0) currentXP = 0;
+    
+    // CHECK BADGE NIVEAU
+    checkAchievements();
     updateSettings();
   }
+
+  // --- SYSTÈME DE VÉRIFICATION DES BADGES ---
+  void checkAchievements() {
+    bool newUnlock = false;
+
+    // 1. Calculer le total des validations (toutes habitudes confondues)
+    int totalCompletions = 0;
+    final box = Hive.box<Habit>(boxName); // On prend toutes les habitudes, même archivées si besoin
+    for (var h in box.values) {
+      totalCompletions += h.completedDays.length;
+    }
+
+    // 2. Vérifier chaque condition
+    
+    // Premier pas
+    if (!unlockedBadgeIds.contains('first_step') && totalCompletions >= 1) {
+      unlockedBadgeIds.add('first_step');
+      newUnlock = true;
+    }
+    
+    // Travailleurs (Volume)
+    if (!unlockedBadgeIds.contains('worker_10') && totalCompletions >= 10) {
+      unlockedBadgeIds.add('worker_10');
+      newUnlock = true;
+    }
+    if (!unlockedBadgeIds.contains('worker_50') && totalCompletions >= 50) {
+      unlockedBadgeIds.add('worker_50');
+      newUnlock = true;
+    }
+
+    // Niveaux
+    if (!unlockedBadgeIds.contains('level_5') && userLevel >= 5) {
+      unlockedBadgeIds.add('level_5');
+      newUnlock = true;
+    }
+    if (!unlockedBadgeIds.contains('level_10') && userLevel >= 10) {
+      unlockedBadgeIds.add('level_10');
+      newUnlock = true;
+    }
+
+    // Joker
+    // On vérifie si N'IMPORTE QUELLE habitude a un jour skippé
+    bool hasUsedJoker = box.values.any((h) => h.skippedDays.isNotEmpty);
+    if (!unlockedBadgeIds.contains('joker_use') && hasUsedJoker) {
+      unlockedBadgeIds.add('joker_use');
+      newUnlock = true;
+    }
+
+    // Streaks (Séries)
+    // On cherche la MEILLEURE série parmi toutes les habitudes
+    int bestStreak = 0;
+    for (var h in box.values) {
+      if (h.streak > bestStreak) bestStreak = h.streak;
+    }
+
+    if (!unlockedBadgeIds.contains('streak_3') && bestStreak >= 3) {
+      unlockedBadgeIds.add('streak_3');
+      newUnlock = true;
+    }
+    if (!unlockedBadgeIds.contains('streak_7') && bestStreak >= 7) {
+      unlockedBadgeIds.add('streak_7');
+      newUnlock = true;
+    }
+    if (!unlockedBadgeIds.contains('streak_30') && bestStreak >= 30) {
+      unlockedBadgeIds.add('streak_30');
+      newUnlock = true;
+    }
+
+    if (newUnlock) {
+      updateSettings();
+      notifyListeners();
+      // On pourrait déclencher un son spécial ou une notif ici
+      SoundManager.play('success.mp3'); 
+    }
+  }
+  // ------------------------------------------
 
   void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer, bool isNegative) {
     bool startCompleted = isNegative; 
@@ -192,13 +288,16 @@ class HabitDatabase extends ChangeNotifier {
       habit.lastCompletedDate = DateTime.now();
       if (!habit.isNegative) habit.streak++;
 
-      int baseReward = 10; // Medium par défaut
+      int baseReward = 10; 
       updateScore(baseReward);
       addXP(baseReward);
 
       if (!habit.completedDays.contains(todayNormalized)) {
         habit.completedDays.add(todayNormalized);
       }
+      
+      // CHECK BADGES APRÈS VALIDATION
+      checkAchievements(); 
     } 
     else if (!isNowCompleted && habit.isCompletedToday) {
       habit.isCompletedToday = false;
@@ -254,11 +353,29 @@ class HabitDatabase extends ChangeNotifier {
     box.put('xp', currentXP);
     box.put('inventory', inventory);
     box.put('itemActive', itemActive);
-    box.put('isDarkMode', isDarkMode); // <--- Sauvegarde du thème
+    box.put('isDarkMode', isDarkMode);
+    box.put('badges', unlockedBadgeIds); // <--- Sauvegarde des badges
   }
 
   void deleteHabit(Habit habit) {
     habit.delete();
     loadHabits();
   }
+}
+
+// --- CLASSE SIMPLE POUR LES BADGES ---
+class AppBadge {
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+
+  AppBadge({
+    required this.id, 
+    required this.title, 
+    required this.description, 
+    required this.icon, 
+    required this.color
+  });
 }
