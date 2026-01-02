@@ -4,7 +4,7 @@ import 'models/habit.dart';
 import 'database/habit_database.dart';
 import 'sound_manager.dart';
 
-class HabitDetailsPage extends StatelessWidget {
+class HabitDetailsPage extends StatefulWidget {
   final Habit habit;
   final HabitDatabase db;
   final VoidCallback onEdit;
@@ -16,24 +16,43 @@ class HabitDetailsPage extends StatelessWidget {
     required this.onEdit,
   });
 
+  @override
+  State<HabitDetailsPage> createState() => _HabitDetailsPageState();
+}
+
+class _HabitDetailsPageState extends State<HabitDetailsPage> {
+  
+  // Prépare les données pour le calendrier (Vert = Fait, Gris = Joker)
   Map<DateTime, int> _prepareHeatmapDataset() {
     Map<DateTime, int> dataset = {};
-    for (var date in habit.completedDays) {
+    
+    // 1. Les jours validés (Couleur normale = 1)
+    for (var date in widget.habit.completedDays) {
       final normalizedDate = DateTime(date.year, date.month, date.day);
       dataset[normalizedDate] = 1;
     }
+
+    // 2. Les jours Joker (Gris = 2)
+    for (var date in widget.habit.skippedDays) {
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      dataset[normalizedDate] = 2; // Intensité différente pour couleur différente
+    }
+    
     return dataset;
   }
 
   String _calculateSuccessRate() {
-    if (habit.completedDays.isEmpty) return "0";
-    return "${habit.completedDays.length}";
+    if (widget.habit.completedDays.isEmpty) return "0";
+    return "${widget.habit.completedDays.length}";
   }
 
   @override
   Widget build(BuildContext context) {
+    // Vérifier si Joker activé aujourd'hui
+    bool isSkippedToday = widget.db.isHabitSkippedToday(widget.habit);
+
     Color habitColor;
-    switch (habit.category) {
+    switch (widget.habit.category) {
       case HabitCategory.sport: habitColor = Colors.orange; break;
       case HabitCategory.work: habitColor = Colors.blue; break;
       case HabitCategory.health: habitColor = Colors.pink; break;
@@ -41,7 +60,7 @@ class HabitDetailsPage extends StatelessWidget {
       case HabitCategory.social: habitColor = Colors.teal; break;
       default: habitColor = Colors.grey; break;
     }
-    if (habit.isNegative) habitColor = Colors.red;
+    if (widget.habit.isNegative) habitColor = Colors.red;
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -57,7 +76,7 @@ class HabitDetailsPage extends StatelessWidget {
             icon: const Icon(Icons.edit, color: Colors.black),
             onPressed: () {
               Navigator.pop(context);
-              onEdit();
+              widget.onEdit();
             },
           ),
         ],
@@ -72,16 +91,16 @@ class HabitDetailsPage extends StatelessWidget {
               Row(
                 children: [
                   Hero(
-                    tag: "habit_icon_${habit.id}",
+                    tag: "habit_icon_${widget.habit.id}",
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: habitColor.withOpacity(0.2),
+                        color: isSkippedToday ? Colors.grey : habitColor.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Icon(
-                        habit.isNegative ? Icons.block : Icons.check_circle,
-                        color: habitColor,
+                        isSkippedToday ? Icons.beach_access : (widget.habit.isNegative ? Icons.block : Icons.check_circle),
+                        color: isSkippedToday ? Colors.grey[700] : habitColor,
                         size: 30,
                       ),
                     ),
@@ -89,19 +108,58 @@ class HabitDetailsPage extends StatelessWidget {
                   const SizedBox(width: 15),
                   Expanded(
                     child: Text(
-                      habit.title,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      widget.habit.title,
+                      style: TextStyle(
+                        fontSize: 24, 
+                        fontWeight: FontWeight.bold,
+                        decoration: isSkippedToday ? TextDecoration.lineThrough : null,
+                        color: isSkippedToday ? Colors.grey : Colors.black
+                      ),
                     ),
                   ),
                 ],
               ),
               
+              const SizedBox(height: 20),
+
+              // 2. LE BOUTON JOKER
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSkippedToday ? Colors.grey[300] : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: isSkippedToday ? Colors.grey : Colors.blue.shade200),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isSkippedToday ? "Journée Joker 🏖️" : "Besoin de repos ?", style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(isSkippedToday ? "Ta série est protégée." : "Utilise un joker pour protéger ta série.", style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    Switch(
+                      value: isSkippedToday,
+                      activeColor: Colors.grey[700],
+                      onChanged: (val) {
+                        setState(() {
+                           widget.db.toggleSkipHabit(widget.habit);
+                        });
+                      },
+                    )
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 30),
 
-              // 2. LES STATS
+              // 3. LES STATS
               Row(
                 children: [
-                  _buildStatCard("Série Actuelle", "${habit.streak} j", Icons.local_fire_department, Colors.orange),
+                  _buildStatCard("Série Actuelle", "${widget.habit.streak} j", Icons.local_fire_department, Colors.orange),
                   const SizedBox(width: 10),
                   _buildStatCard("Total Validé", _calculateSuccessRate(), Icons.emoji_events, Colors.amber),
                 ],
@@ -109,28 +167,29 @@ class HabitDetailsPage extends StatelessWidget {
 
               const SizedBox(height: 30),
 
-              // 3. CALENDRIER (HEATMAP)
+              // 4. CALENDRIER (HEATMAP)
               const Text("Historique", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                width: double.infinity, // Prend toute la largeur
+                width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
                 ),
-                child: Center( // <--- LE SECRET DU CENTRAGE EST ICI
+                child: Center(
                   child: HeatMapCalendar(
                     datasets: _prepareHeatmapDataset(),
                     colorMode: ColorMode.color,
                     defaultColor: Colors.grey[200],
                     textColor: Colors.black,
                     showColorTip: false,
-                    size: 28, // Taille ajustée pour bien rentrer
+                    size: 28,
                     margin: const EdgeInsets.all(4),
                     colorsets: {
-                      1: habitColor,
+                      1: habitColor,        // Couleur Validé
+                      2: Colors.grey,       // Couleur Joker
                     },
                     onClick: (value) {},
                   ),
@@ -139,7 +198,7 @@ class HabitDetailsPage extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              // 4. BOUTON SUPPRIMER
+              // 5. BOUTON SUPPRIMER
               Center(
                 child: TextButton.icon(
                   onPressed: () {
@@ -152,7 +211,7 @@ class HabitDetailsPage extends StatelessWidget {
                           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
                           TextButton(
                             onPressed: () {
-                              db.deleteHabit(habit);
+                              widget.db.deleteHabit(widget.habit);
                               Navigator.pop(context);
                               Navigator.pop(context);
                               SoundManager.play('error.mp3');

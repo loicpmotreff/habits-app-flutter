@@ -60,9 +60,12 @@ class Habit extends HiveObject {
   @HiveField(12, defaultValue: false)
   bool isTimer;
 
-  // --- NOUVEAU CHAMP ---
   @HiveField(13, defaultValue: false)
-  bool isNegative; // True = "À ne pas faire" (Commence validé)
+  bool isNegative;
+
+  // --- NOUVEAU CHAMP : JOURS SAUTÉS (JOKERS) ---
+  @HiveField(14, defaultValue: [])
+  List<DateTime> skippedDays; 
 
   Habit({
     required this.id,
@@ -78,6 +81,7 @@ class Habit extends HiveObject {
     this.currentValue = 0,
     this.unit = '',
     this.isTimer = false,
-    this.isNegative = false, // Par défaut c'est une habitude positive
+    this.isNegative = false,
+    this.skippedDays = const [], // Par défaut vide
   });
 }
