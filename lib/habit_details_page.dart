@@ -48,6 +48,11 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Détection du mode sombre
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+    Color textColor = isDark ? Colors.white : Colors.black;
+    Color cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
+
     // Vérifier si Joker activé aujourd'hui
     bool isSkippedToday = widget.db.isHabitSkippedToday(widget.habit);
 
@@ -63,17 +68,17 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
     if (widget.habit.isNegative) habitColor = Colors.red;
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      // Plus de couleur de fond en dur, on laisse le Thème gérer
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: textColor), // Icône adaptative
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit, color: Colors.black),
+            icon: Icon(Icons.edit, color: textColor), // Icône adaptative
             onPressed: () {
               Navigator.pop(context);
               widget.onEdit();
@@ -95,12 +100,12 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isSkippedToday ? Colors.grey : habitColor.withOpacity(0.2),
+                        color: isSkippedToday ? (isDark ? Colors.grey[800] : Colors.grey[300]) : habitColor.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(15),
                       ),
                       child: Icon(
                         isSkippedToday ? Icons.beach_access : (widget.habit.isNegative ? Icons.block : Icons.check_circle),
-                        color: isSkippedToday ? Colors.grey[700] : habitColor,
+                        color: isSkippedToday ? Colors.grey : habitColor,
                         size: 30,
                       ),
                     ),
@@ -113,7 +118,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                         fontSize: 24, 
                         fontWeight: FontWeight.bold,
                         decoration: isSkippedToday ? TextDecoration.lineThrough : null,
-                        color: isSkippedToday ? Colors.grey : Colors.black
+                        color: isSkippedToday ? Colors.grey : textColor // Texte adaptatif
                       ),
                     ),
                   ),
@@ -127,9 +132,16 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSkippedToday ? Colors.grey[300] : Colors.blue.shade50,
+                  // Couleur adaptative pour le fond du Joker
+                  color: isSkippedToday 
+                      ? (isDark ? Colors.grey[800] : Colors.grey[300]) 
+                      : (isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50),
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: isSkippedToday ? Colors.grey : Colors.blue.shade200),
+                  border: Border.all(
+                      color: isSkippedToday 
+                          ? Colors.grey 
+                          : (isDark ? Colors.blue.shade700 : Colors.blue.shade200)
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -137,13 +149,16 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(isSkippedToday ? "Journée Joker 🏖️" : "Besoin de repos ?", style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(isSkippedToday ? "Ta série est protégée." : "Utilise un joker pour protéger ta série.", style: const TextStyle(fontSize: 12)),
+                        Text(isSkippedToday ? "Journée Joker 🏖️" : "Besoin de repos ?", style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                        Text(
+                          isSkippedToday ? "Ta série est protégée." : "Utilise un joker pour protéger ta série.", 
+                          style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.7))
+                        ),
                       ],
                     ),
                     Switch(
                       value: isSkippedToday,
-                      activeColor: Colors.grey[700],
+                      activeColor: Colors.grey[400],
                       onChanged: (val) {
                         setState(() {
                            widget.db.toggleSkipHabit(widget.habit);
@@ -159,33 +174,33 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
               // 3. LES STATS
               Row(
                 children: [
-                  _buildStatCard("Série Actuelle", "${widget.habit.streak} j", Icons.local_fire_department, Colors.orange),
+                  _buildStatCard("Série Actuelle", "${widget.habit.streak} j", Icons.local_fire_department, Colors.orange, cardColor, textColor),
                   const SizedBox(width: 10),
-                  _buildStatCard("Total Validé", _calculateSuccessRate(), Icons.emoji_events, Colors.amber),
+                  _buildStatCard("Total Validé", _calculateSuccessRate(), Icons.emoji_events, Colors.amber, cardColor, textColor),
                 ],
               ),
 
               const SizedBox(height: 30),
 
               // 4. CALENDRIER (HEATMAP)
-              const Text("Historique", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("Historique", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardColor, // Fond adaptatif (Noir/Blanc)
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
                 ),
                 child: Center(
                   child: HeatMapCalendar(
                     datasets: _prepareHeatmapDataset(),
                     colorMode: ColorMode.color,
-                    defaultColor: Colors.grey[200],
-                    textColor: Colors.black,
+                    defaultColor: isDark ? Colors.grey[800] : Colors.grey[200], // Cases vides adaptatives
+                    textColor: textColor, // Texte des jours (Lun, Mar...) adaptatif
                     showColorTip: false,
-                    size: 28,
+                    size: 28, // Taille des carrés
                     margin: const EdgeInsets.all(4),
                     colorsets: {
                       1: habitColor,        // Couleur Validé
@@ -234,21 +249,21 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color iconColor, Color bgColor, Color txtColor) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: bgColor,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
         ),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 28),
+            Icon(icon, color: iconColor, size: 28),
             const SizedBox(height: 5),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: txtColor)),
+            Text(title, style: TextStyle(color: txtColor.withOpacity(0.6), fontSize: 12)),
           ],
         ),
       ),

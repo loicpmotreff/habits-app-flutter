@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/habit.dart';
-import '../sound_manager.dart'; // Pour le son du Level Up
+import '../sound_manager.dart';
 
 class HabitDatabase extends ChangeNotifier {
   static const String boxName = 'habit_box';
   static const String settingsBoxName = 'settings_box';
 
   List<Habit> habits = [];
-  
-  // --- NOUVEAUX CHAMPS RPG ---
-  int userScore = 0;      // Or (Gold)
-  int userLevel = 1;      // Niveau
-  int currentXP = 0;      // XP actuelle
-  // ---------------------------
-
+  int userScore = 0;
+  int userLevel = 1;
+  int currentXP = 0;
   List<String> inventory = [];
   String itemActive = 'default';
+  
+  // --- NOUVEAU : THÈME ---
+  bool isDarkMode = false; 
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -33,16 +32,21 @@ class HabitDatabase extends ChangeNotifier {
 
     var settingsBox = await Hive.openBox(settingsBoxName);
     userScore = (settingsBox.get('score') ?? 0) as int;
-    
-    // CHARGEMENT XP & NIVEAU
     userLevel = (settingsBox.get('level') ?? 1) as int;
     currentXP = (settingsBox.get('xp') ?? 0) as int;
-    
-    var rawInventory = settingsBox.get('inventory');
-    inventory = rawInventory != null ? List<String>.from(rawInventory) : [];
+    inventory = (settingsBox.get('inventory') != null) ? List<String>.from(settingsBox.get('inventory')) : [];
     itemActive = settingsBox.get('itemActive', defaultValue: 'default');
+    
+    // Charger le thème
+    isDarkMode = settingsBox.get('isDarkMode', defaultValue: false);
 
     loadHabits();
+  }
+
+  void toggleTheme() {
+    isDarkMode = !isDarkMode;
+    updateSettings();
+    notifyListeners(); // Dit à l'app de se redessiner
   }
 
   void loadHabits() {
@@ -107,30 +111,22 @@ class HabitDatabase extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- LOGIQUE XP & NIVEAUX ---
-  int get xpRequiredForNextLevel => userLevel * 100; // Niv 1 = 100xp, Niv 2 = 200xp...
+  int get xpRequiredForNextLevel => userLevel * 100;
 
   void addXP(int amount) {
     currentXP += amount;
-
-    // Montée de niveau (Level Up)
     while (currentXP >= xpRequiredForNextLevel) {
       currentXP -= xpRequiredForNextLevel;
       userLevel++;
-      SoundManager.play('success.mp3'); // Son de victoire à chaque niveau !
+      SoundManager.play('success.mp3');
     }
-
-    // Descente de niveau (Si on décoche des tâches et qu'on passe en négatif)
     while (currentXP < 0 && userLevel > 1) {
       userLevel--;
-      currentXP += xpRequiredForNextLevel; // On récupère le max XP du niveau précédent
+      currentXP += xpRequiredForNextLevel;
     }
-    // Si niveau 1 et XP négative, on bloque à 0
     if (userLevel == 1 && currentXP < 0) currentXP = 0;
-
     updateSettings();
   }
-  // ----------------------------
 
   void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer, bool isNegative) {
     bool startCompleted = isNegative; 
@@ -175,7 +171,6 @@ class HabitDatabase extends ChangeNotifier {
 
   void updateProgress(Habit habit, int change) {
     if (isHabitSkippedToday(habit)) return; 
-
     final today = DateTime.now();
     final todayNormalized = DateTime(today.year, today.month, today.day);
 
@@ -192,19 +187,14 @@ class HabitDatabase extends ChangeNotifier {
       isNowCompleted = habit.currentValue >= habit.targetValue;
     }
 
-    // --- MISE À JOUR SCORE ET XP ---
     if (isNowCompleted && !habit.isCompletedToday) {
       habit.isCompletedToday = true;
       habit.lastCompletedDate = DateTime.now();
       if (!habit.isNegative) habit.streak++;
 
-      // CALCUL RÉCOMPENSE
-      int baseReward = 10;
-      if (habit.difficulty == HabitDifficulty.easy) baseReward = 5;
-      if (habit.difficulty == HabitDifficulty.hard) baseReward = 20;
-      
-      updateScore(baseReward); // OR
-      addXP(baseReward);       // XP (Même montant que l'or pour simplifier)
+      int baseReward = 10; // Medium par défaut
+      updateScore(baseReward);
+      addXP(baseReward);
 
       if (!habit.completedDays.contains(todayNormalized)) {
         habit.completedDays.add(todayNormalized);
@@ -214,13 +204,9 @@ class HabitDatabase extends ChangeNotifier {
       habit.isCompletedToday = false;
       if (habit.streak > 0) habit.streak--; 
 
-      // CALCUL PÉNALITÉ
       int basePenalty = 10;
-      if (habit.difficulty == HabitDifficulty.easy) basePenalty = 5;
-      if (habit.difficulty == HabitDifficulty.hard) basePenalty = 20;
-      
-      updateScore(-basePenalty); // PERTE OR
-      addXP(-basePenalty);       // PERTE XP
+      updateScore(-basePenalty);
+      addXP(-basePenalty);
 
       habit.completedDays.removeWhere((date) => 
         date.year == today.year && date.month == today.month && date.day == today.day
@@ -264,10 +250,11 @@ class HabitDatabase extends ChangeNotifier {
   void updateSettings() {
     var box = Hive.box(settingsBoxName);
     box.put('score', userScore);
-    box.put('level', userLevel); // Sauvegarde Niveau
-    box.put('xp', currentXP);    // Sauvegarde XP
+    box.put('level', userLevel);
+    box.put('xp', currentXP);
     box.put('inventory', inventory);
     box.put('itemActive', itemActive);
+    box.put('isDarkMode', isDarkMode); // <--- Sauvegarde du thème
   }
 
   void deleteHabit(Habit habit) {

@@ -31,42 +31,51 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // On écoute le provider pour changer le mode instantanément
+    final db = context.watch<HabitDatabase>(); 
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Habit Pet RPG',
       
-      // --- DÉBUT DU THÈME BLEU ---
+      // --- THÈME CLAIR (BLUE OCEAN) ---
       theme: ThemeData(
-        // 1. La couleur de base (génère toutes les nuances)
+        brightness: Brightness.light,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue.shade800, // Bleu profond
-          secondary: Colors.tealAccent.shade700, // Couleur secondaire
-          surface: Colors.white, // Couleur des cartes
-          background: const Color(0xFFF5F7FA), // Couleur de fond gris-bleuté
+          seedColor: Colors.blue.shade800,
+          background: const Color(0xFFF5F7FA),
         ),
-        
-        // 2. Couleur de fond de l'application (Scaffold)
         scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-        
-        // 3. Style des AppBars
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          titleTextStyle: TextStyle(color: Colors.black87, fontSize: 22, fontWeight: FontWeight.bold),
-          iconTheme: IconThemeData(color: Colors.black87),
-        ),
-
-        // 4. Style des cartes (Card / Container)
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        
-        // 5. Style Material 3 activé
+        cardTheme: CardThemeData(color: Colors.white, elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
         useMaterial3: true,
       ),
-      // --- FIN DU THÈME ---
+
+      // --- THÈME SOMBRE (DARK MODE) ---
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.dark(
+          primary: Colors.blue.shade400, // Bleu plus clair pour ressortir sur le noir
+          secondary: Colors.tealAccent,
+          background: const Color(0xFF121212), // Noir "Material"
+          surface: const Color(0xFF1E1E1E),    // Gris foncé pour les cartes
+        ),
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        cardTheme: CardThemeData(color: const Color(0xFF1E1E1E), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+        useMaterial3: true,
+        // On adapte le texte
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      // C'est ici qu'on bascule !
+      themeMode: db.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       
       home: const MainScreen(),
     );
@@ -143,8 +152,7 @@ class _HabitPageState extends State<HabitPage> {
  void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
     final controller = TextEditingController(text: habitToEdit?.title ?? "");
     List<int> selectedDays = habitToEdit != null ? List<int>.from(habitToEdit.activeDays) : [1, 2, 3, 4, 5, 6, 7];
-    // On force la difficulté à "Moyen" par défaut car on retire le sélecteur
-    HabitDifficulty selectedDifficulty = HabitDifficulty.medium; 
+    HabitDifficulty selectedDifficulty = HabitDifficulty.medium;
     HabitCategory selectedCategory = habitToEdit?.category ?? HabitCategory.other;
     TextEditingController targetController = TextEditingController(text: (habitToEdit?.targetValue ?? 1).toString());
     TextEditingController unitController = TextEditingController(text: habitToEdit?.unit ?? "");
@@ -152,118 +160,165 @@ class _HabitPageState extends State<HabitPage> {
     bool isTimerMode = habitToEdit?.isTimer ?? false;
     bool isNegativeMode = habitToEdit?.isNegative ?? false;
 
+    // Couleurs adaptatives au thème
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = theme.textTheme.bodyMedium?.color ?? Colors.black;
+    final subTextColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
+    // Couleur de fond des champs de saisie : légèrement plus clair/foncé que la carte
+    final inputFillColor = isDark ? Colors.grey.shade800 : Colors.grey.shade100;
+    // Couleur de bordure subtile
+    final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), // Coins arrondis
-              title: Text(habitToEdit == null ? "Nouvelle quête" : "Modifier", style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.bold)),
+              // Fond et forme de la boîte de dialogue
+              backgroundColor: theme.cardTheme.color,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+
+              // --- TITRE ---
+              title: Center(
+                child: Text(
+                  habitToEdit == null ? "Nouvelle quête" : "Modifier la quête",
+                  style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 22),
+                ),
+              ),
+
+              // --- CONTENU ---
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // 1. CHAMP TITRE
                     TextField(
-                      controller: controller, 
-                      decoration: const InputDecoration(
-                        hintText: "Titre", 
-                        border: OutlineInputBorder(),
+                      controller: controller,
+                      style: TextStyle(color: textColor, fontSize: 18),
+                      decoration: InputDecoration(
+                        hintText: "Ex : Sport, méditer ...",
+                        hintStyle: TextStyle(color: subTextColor),
+                        prefixIcon: Icon(Icons.edit, color: theme.colorScheme.primary),
                         filled: true,
-                        fillColor: Colors.white,
-                      ), 
-                      autofocus: true
-                    ),
-                    const SizedBox(height: 15),
-
-                    // SWITCH : HABITUDE NÉGATIVE
-                    SwitchListTile(
-                      title: const Text("À éviter (Négatif) 🚭", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      subtitle: const Text("Coché par défaut."),
-                      value: isNegativeMode,
-                      activeColor: Colors.red, // On garde rouge pour le danger
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) {
-                        setState(() {
-                          isNegativeMode = val;
-                          if (isNegativeMode) isTimerMode = false;
-                        });
-                      },
-                    ),
-
-                    // SWITCH : CHRONO (Caché si Négatif)
-                    if (!isNegativeMode) ...[
-                      const Divider(),
-                      SwitchListTile(
-                        title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        subtitle: const Text("Lancer un compte à rebours"),
-                        value: isTimerMode,
-                        activeColor: Colors.blue.shade700, // BLEU ICI 🔵
-                        contentPadding: EdgeInsets.zero,
-                        onChanged: (val) {
-                          setState(() {
-                            isTimerMode = val;
-                            if (isTimerMode && unitController.text.isEmpty) unitController.text = "min";
-                          });
-                        },
+                        fillColor: inputFillColor,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: borderColor)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: theme.colorScheme.primary, width: 2)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                       ),
-                    ],
+                      autofocus: habitToEdit == null,
+                    ),
+                    const SizedBox(height: 24),
 
-                    const SizedBox(height: 15),
+                    // 2. SECTION TYPE (Switchs)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: inputFillColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Column(
+                        children: [
+                          // SWITCH : NÉGATIF
+                          SwitchListTile(
+                            title: const Text("À éviter (Mauvaise habitude) 🚭", style: TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text("Commence validé. Décoche si tu craques !", style: TextStyle(color: subTextColor, fontSize: 12)),
+                            value: isNegativeMode,
+                            activeColor: Colors.redAccent,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            onChanged: (val) => setState(() { isNegativeMode = val; if (isNegativeMode) isTimerMode = false; }),
+                          ),
+                          if (!isNegativeMode) ...[
+                             Divider(height: 1, color: borderColor),
+                            // SWITCH : CHRONO
+                            SwitchListTile(
+                              title: const Text("Mode Chronomètre ⏱️", style: TextStyle(fontWeight: FontWeight.w600)),
+                              subtitle: Text("Pour les activités basées sur le temps.", style: TextStyle(color: subTextColor, fontSize: 12)),
+                              value: isTimerMode,
+                              activeColor: theme.colorScheme.primary,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              onChanged: (val) => setState(() { isTimerMode = val; if (isTimerMode && unitController.text.isEmpty) unitController.text = "min"; }),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
 
-                    // CHAMPS OBJECTIF (Cachés si Négatif)
-                    if (!isNegativeMode)
+                    // 3. SECTION OBJECTIFS (Cachée si Négatif)
+                    if (!isNegativeMode) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionTitle(context, "Objectif", Icons.ads_click),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
+                          // Objectif (Chiffre)
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: TextField(
                               controller: targetController,
                               keyboardType: TextInputType.number,
+                              style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
                               decoration: InputDecoration(
-                                labelText: isTimerMode ? "Durée" : "Objectif",
-                                helperText: isTimerMode ? "en minutes" : "ex: 5",
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                                labelText: isTimerMode ? "Durée" : "Quantité",
+                                labelStyle: TextStyle(color: subTextColor),
+                                filled: true, fillColor: inputFillColor,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
+                          // Unité (Texte)
                           Expanded(
-                            flex: 2,
+                            flex: 4,
                             child: TextField(
                               controller: unitController,
                               enabled: !isTimerMode,
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
-                                labelText: "Unité",
-                                helperText: isTimerMode ? "Auto" : "ex: verres",
-                                hintText: isTimerMode ? "minutes" : "fois",
-                                border: const OutlineInputBorder(),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                                labelText: "Unité (ex: pages, verres)",
+                                labelStyle: TextStyle(color: subTextColor),
+                                hintText: isTimerMode ? "minutes" : "",
+                                filled: true, fillColor: inputFillColor,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                               ),
                             ),
                           ),
                         ],
                       ),
+                    ],
                     
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     
-                    // CATÉGORIES
-                    const Align(alignment: Alignment.centerLeft, child: Text("Catégorie", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
-                    const SizedBox(height: 8),
+                    // 4. SECTION CATÉGORIE
+                    _buildSectionTitle(context, "Catégorie", Icons.category),
+                    const SizedBox(height: 12),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: HabitCategory.values.map((cat) {
                           final details = _getCategoryDetails(cat);
+                          bool isSelected = selectedCategory == cat;
                           return Padding(
-                            padding: const EdgeInsets.only(right: 5),
-                            child: ChoiceChip(
-                              label: Text(details['label'], style: const TextStyle(fontSize: 11)),
-                              avatar: Icon(details['icon'], size: 14, color: selectedCategory == cat ? Colors.white : details['color']),
-                              selected: selectedCategory == cat,
-                              selectedColor: details['color'], // On garde la couleur de la catégorie
-                              backgroundColor: Colors.grey[100],
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip( // Utilisation de FilterChip pour un look plus moderne
+                              label: Text(details['label']),
+                              labelStyle: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                              avatar: Icon(details['icon'], size: 16, color: isSelected ? Colors.white : details['color']),
+                              selected: isSelected,
+                              selectedColor: details['color'],
+                              checkmarkColor: Colors.white,
+                              backgroundColor: inputFillColor,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                               onSelected: (selected) { if (selected) setState(() => selectedCategory = cat); },
                             ),
                           );
@@ -271,53 +326,87 @@ class _HabitPageState extends State<HabitPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     
-                    // FRÉQUENCE (JOURS)
-                    const Align(alignment: Alignment.centerLeft, child: Text("Fréquence", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 5,
-                      children: List.generate(7, (index) {
-                        int dayId = index + 1;
-                        List<String> dl = ["L", "M", "M", "J", "V", "S", "D"];
-                        bool isSel = selectedDays.contains(dayId);
-                        return GestureDetector(
-                          onTap: () => setState(() => isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId)),
-                          child: CircleAvatar(
-                            radius: 16, 
-                            backgroundColor: isSel ? Colors.blue.shade700 : Colors.grey[200], // BLEU ICI 🔵
-                            child: Text(dl[index], style: TextStyle(color: isSel ? Colors.white : Colors.black, fontSize: 12))
-                          ),
-                        );
-                      }),
+                    // 5. SECTION FRÉQUENCE
+                    _buildSectionTitle(context, "Fréquence", Icons.calendar_today),
+                    const SizedBox(height: 12),
+                    Container(
+                       padding: const EdgeInsets.symmetric(vertical: 8),
+                       decoration: BoxDecoration(
+                         color: inputFillColor,
+                         borderRadius: BorderRadius.circular(16),
+                       ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(7, (index) {
+                          int dayId = index + 1;
+                          List<String> dl = ["L", "M", "M", "J", "V", "S", "D"];
+                          bool isSel = selectedDays.contains(dayId);
+                          return GestureDetector(
+                            onTap: () => setState(() => isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId)),
+                            child: AnimatedContainer( // Animation douce au clic
+                              duration: const Duration(milliseconds: 200),
+                              width: 36, height: 36,
+                              decoration: BoxDecoration(
+                                color: isSel ? theme.colorScheme.primary : Colors.transparent,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: isSel ? theme.colorScheme.primary : borderColor, width: 2)
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(dl[index], style: TextStyle(color: isSel ? Colors.white : textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                          );
+                        }),
+                      ),
                     )
                   ],
                 ),
               ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700, // BOUTON BLEU 🔵
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    if (controller.text.isNotEmpty) {
-                      int target = int.tryParse(targetController.text) ?? 1;
-                      if (target < 1) target = 1;
-                      String unit = isTimerMode ? "min" : unitController.text.trim();
 
-                      if (habitToEdit == null) {
-                        context.read<HabitDatabase>().addHabit(controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
-                      } else {
-                        context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
-                      }
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text("Sauvegarder"),
+              // --- ACTIONS ---
+              actions: [
+                Row(
+                  children: [
+                    // Bouton Annuler
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: subTextColor),
+                        child: const Text("Annuler"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Bouton Sauvegarder
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 4, shadowColor: theme.colorScheme.primary.withOpacity(0.4)
+                        ),
+                        onPressed: () {
+                          // (Logique de sauvegarde inchangée)
+                          if (controller.text.isNotEmpty) {
+                            int target = int.tryParse(targetController.text) ?? 1;
+                            if (target < 1) target = 1;
+                            String unit = isTimerMode ? "min" : unitController.text.trim();
+                            if (habitToEdit == null) {
+                              context.read<HabitDatabase>().addHabit(controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
+                            } else {
+                              context.read<HabitDatabase>().updateHabit(habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory, target, unit, isTimerMode, isNegativeMode);
+                            }
+                            Navigator.pop(context);
+                          }
+                        },
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text("Sauvegarder", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );
@@ -326,10 +415,23 @@ class _HabitPageState extends State<HabitPage> {
       },
     );
   }
+
+  // Petit helper pour les titres de section
+  Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: theme.textTheme.bodyMedium?.color)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.transparent,
       body: Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -342,7 +444,7 @@ class _HabitPageState extends State<HabitPage> {
                 builder: (context, db, child) => FadeInDown(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+                    decoration: BoxDecoration(color: Theme.of(context).cardTheme.color, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -426,6 +528,17 @@ class HabitTile extends StatelessWidget {
   Widget build(BuildContext context) {
     bool isSkipped = db.isHabitSkippedToday(habit);
 
+    // 1. ON DÉTECTE SI ON EST EN MODE SOMBRE
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 2. ON DÉFINIT LES COULEURS INTELLIGENTES
+    // Couleur du fond de la carte (Blanc le jour, Gris foncé la nuit)
+    Color cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
+    // Couleur du fond si "Joker" (Gris clair le jour, Gris moyen la nuit)
+    Color skippedColor = isDark ? Colors.grey[800]! : Colors.grey[100]!;
+    // Couleur du texte (Noir le jour, Blanc la nuit)
+    Color textColor = isDark ? Colors.white : Colors.black87;
+
     Map<String, dynamic> details;
     switch (habit.category) {
       case HabitCategory.sport: details = {'icon': Icons.fitness_center, 'color': Colors.orange}; break;
@@ -442,15 +555,15 @@ class HabitTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isSkipped ? Colors.grey[100] : Colors.white,
+        // 3. ON UTILISE NOS COULEURS INTELLIGENTES ICI (Ligne 454 sur votre image)
+        color: isSkipped ? skippedColor : cardColor, 
         borderRadius: BorderRadius.circular(15),
         border: Border(left: BorderSide(color: mainColor, width: 6)),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 4))],
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         
-        // --- GAUCHE (ACTIONS) ---
         leading: habit.isTimer
             ? IconButton(
                 icon: Icon(
@@ -486,7 +599,6 @@ class HabitTile extends StatelessWidget {
                         db.updateProgress(habit, change);
                         
                         if (habit.isNegative && val == false) {
-                           // Son échec
                         } else if (val == true) {
                           confettiController.play();
                           SoundManager.play('success.mp3');
@@ -496,9 +608,7 @@ class HabitTile extends StatelessWidget {
                   )
                 : null),
 
-        // --- CENTRE (TITRE + NAVIGATION VERS STATS) ---
         title: GestureDetector(
-          // C'EST ICI LA CORRECTION : On ouvre la page de détails !
           onTap: () {
             Navigator.push(
               context,
@@ -506,7 +616,7 @@ class HabitTile extends StatelessWidget {
                 builder: (context) => HabitDetailsPage(
                   habit: habit,
                   db: db,
-                  onEdit: onEdit, // On passe la main à la page de détails pour modifier
+                  onEdit: onEdit,
                 ),
               ),
             );
@@ -520,7 +630,8 @@ class HabitTile extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   decoration: (habit.isCompletedToday && !habit.isNegative) ? TextDecoration.lineThrough : null,
-                  color: (habit.isCompletedToday && !habit.isNegative) || isSkipped ? Colors.grey[400] : Colors.black87,
+                  // 4. ON APPLIQUE LA COULEUR DU TEXTE ICI (Sinon le texte noir sur fond noir ne se voit pas)
+                  color: (habit.isCompletedToday && !habit.isNegative) || isSkipped ? Colors.grey : textColor,
                 ),
               ),
               if (isSkipped)
@@ -536,7 +647,6 @@ class HabitTile extends StatelessWidget {
           ),
         ),
 
-        // --- DROITE (COMPTEUR OU FLECHE) ---
         trailing: isCounter
             ? Row(
                 mainAxisSize: MainAxisSize.min,
@@ -551,7 +661,8 @@ class HabitTile extends StatelessWidget {
                        db.updateProgress(habit, -1);
                     },
                   ),
-                  Text("${habit.currentValue}/${habit.targetValue} ${habit.unit}", style: TextStyle(fontWeight: FontWeight.bold, color: isSkipped ? Colors.grey : Colors.black)),
+                  // 5. TEXTE DU COMPTEUR ADAPTATIF
+                  Text("${habit.currentValue}/${habit.targetValue} ${habit.unit}", style: TextStyle(fontWeight: FontWeight.bold, color: isSkipped ? Colors.grey : textColor)),
                   IconButton(
                     icon: Icon(Icons.add_circle, color: isSkipped ? Colors.grey : mainColor),
                     onPressed: () {
@@ -573,6 +684,7 @@ class HabitTile extends StatelessWidget {
     );
   }
 }
+
 class FocusTimerPage extends StatefulWidget {
   final Habit habit;
   final HabitDatabase db;
