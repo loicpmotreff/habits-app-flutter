@@ -85,7 +85,7 @@ class SettingsPage extends StatelessWidget {
               
               const SizedBox(height: 40),
               Center(
-                child: Text("Version 2.1.0\nFait avec ❤️ avec Flutter", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500)),
+                child: Text("Version 1.0.0", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500)),
               ),
             ],
           ),
