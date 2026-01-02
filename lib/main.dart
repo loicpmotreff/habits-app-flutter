@@ -10,6 +10,7 @@ import 'models/habit.dart';
 import 'profile_page.dart';
 import 'sound_manager.dart';
 import 'habit_details_page.dart';
+import 'package:flutter/cupertino.dart';  
 
 // --- PALETTE "BADMINTON NIGHT" ---
 const Color kNeonCyan = Color(0xFF00C2E0);      // Bleu électrique
@@ -152,6 +153,7 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
     final isDark = theme.brightness == Brightness.dark;
     final dialogColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final inputColor = isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100;
+    final labelStyle = TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.bold);
 
     showDialog(
       context: context,
@@ -161,102 +163,104 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
             return AlertDialog(
               backgroundColor: dialogColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              contentPadding: const EdgeInsets.all(24), // Plus d'espace autour
+              
+              // --- TITRE DE LA FENÊTRE ---
               title: Text(
-                habitToEdit == null ? "Nouvelle quête" : "Modifier",
+                habitToEdit == null ? "Créer une Quête" : "Modifier la Quête",
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
               ),
+              
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start, // Tout aligner à gauche
                   children: [
-                    // --- 1. TITRE ---
+                    
+                    // --- 1. IDENTITÉ ---
+                    Text("TITRE & CATÉGORIE", style: labelStyle),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: controller,
-                      autofocus: false, // On garde false pour la sécurité anti-crash
+                      autofocus: false,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
-                        hintText: "Titre de la quête...",
+                        hintText: "Ex: Lire 10 pages...",
                         filled: true,
                         fillColor: inputColor,
-                        prefixIcon: const Icon(Icons.edit),
+                        prefixIcon: const Icon(Icons.edit_outlined),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 15),
-
-                    // --- 2. SWITCHS ---
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SwitchListTile(
-                            title: const Text("Négatif", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            value: isNegativeMode,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            activeColor: Colors.redAccent,
-                            onChanged: (val) => setState(() { isNegativeMode = val; if(val) isTimerMode = false; }),
-                          ),
-                        ),
-                        Expanded(
-                          child: SwitchListTile(
-                            title: const Text("Chrono", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                            value: isTimerMode,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            activeColor: Colors.cyan,
-                            onChanged: (val) => setState(() { isTimerMode = val; }),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    // --- 3. CATÉGORIES (VERSION LISTE DÉROULANTE) ---
-                    // C'est ici que ça change ! Plus de ListView, donc plus de crash.
+                    const SizedBox(height: 10),
+                    
+                    // Menu déroulant (Dropdown)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: inputColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<HabitCategory>(
                           value: selectedCategory,
-                          isExpanded: true, // Prend toute la largeur
-                          icon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                          dropdownColor: dialogColor, // Couleur du menu déroulant
-                          items: HabitCategory.values.map((HabitCategory cat) {
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down),
+                          dropdownColor: dialogColor,
+                          items: HabitCategory.values.map((cat) {
                             final details = _getCategoryDetails(cat);
-                            return DropdownMenuItem<HabitCategory>(
+                            return DropdownMenuItem(
                               value: cat,
                               child: Row(
                                 children: [
-                                  Icon(details['icon'], size: 20, color: details['color']),
+                                  Icon(details['icon'], size: 18, color: details['color']),
                                   const SizedBox(width: 10),
-                                  Text(
-                                    details['label'],
-                                    style: TextStyle(
-                                      color: isDark ? Colors.white : Colors.black87
-                                    ),
-                                  ),
+                                  Text(details['label'], style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
                                 ],
                               ),
                             );
                           }).toList(),
-                          onChanged: (HabitCategory? newValue) {
-                            if (newValue != null) {
-                              setState(() => selectedCategory = newValue);
-                            }
-                          },
+                          onChanged: (val) => setState(() => selectedCategory = val!),
                         ),
                       ),
                     ),
 
-                    // ... juste après le Container du DropdownButton
+                    const SizedBox(height: 20),
 
+                    // --- 2. PARAMÈTRES (OPTIONS) ---
+                    Text("TYPE DE QUÊTE", style: labelStyle),
+                    const SizedBox(height: 8),
+                    
+                    // Option Négatif avec explication
+                    Container(
+                      decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
+                      child: SwitchListTile(
+                        title: const Text("Habitude Négative", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        subtitle: Text("Cocher pour une mauvaise habitude à perdre (ex: Fumer)", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        value: isNegativeMode,
+                        activeColor: Colors.redAccent,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                        onChanged: (val) => setState(() { isNegativeMode = val; if(val) isTimerMode = false; }),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Option Chrono avec explication
+                    Container(
+                      decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
+                      child: SwitchListTile(
+                        title: const Text("Mode Chronomètre", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        subtitle: Text("Utiliser un compte à rebours au lieu d'une quantité", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                        value: isTimerMode,
+                        activeColor: kNeonCyan,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                        onChanged: (val) => setState(() => isTimerMode = val),
+                      ),
+                    ),
+
+                    // --- 3. OBJECTIF (Seulement si positif) ---
                     if (!isNegativeMode) ...[
-                      const SizedBox(height: 15),
+                      const SizedBox(height: 20),
+                      Text("OBJECTIF JOURNALIER", style: labelStyle),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -265,6 +269,7 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                               controller: targetController,
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.center,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                               decoration: InputDecoration(
                                 labelText: isTimerMode ? "Min" : "Qté",
                                 filled: true,
@@ -278,10 +283,10 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                             flex: 2,
                             child: TextField(
                               controller: unitController,
-                              enabled: !isTimerMode, // Désactivé si c'est un chrono
+                              enabled: !isTimerMode,
                               decoration: InputDecoration(
-                                labelText: "Unité (ex: pages)",
-                                hintText: isTimerMode ? "minutes" : "",
+                                labelText: "Unité",
+                                hintText: isTimerMode ? "minutes" : "ex: pages, verres...",
                                 filled: true,
                                 fillColor: inputColor,
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -292,11 +297,11 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                       ),
                     ],
 
-                    // ... juste avant la Row des jours
+                    const SizedBox(height: 20),
 
-                    const SizedBox(height: 15),
-
-                    // --- 4. JOURS ---
+                    // --- 4. FRÉQUENCE ---
+                    Text("RÉCURRENCE", style: labelStyle),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: List.generate(7, (index) {
@@ -304,19 +309,20 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                         bool isSel = selectedDays.contains(dayId);
                         return GestureDetector(
                           onTap: () => setState(() {
-                            if (isSel) {
-                              if (selectedDays.length > 1) selectedDays.remove(dayId);
-                            } else {
-                              selectedDays.add(dayId);
-                            }
+                            isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId);
                           }),
-                          child: CircleAvatar(
-                            radius: 16,
-                            backgroundColor: isSel ? Colors.cyan : inputColor,
+                          child: Container(
+                            width: 35, height: 35, // Un peu plus grand pour le doigt
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isSel ? kNeonCyan : inputColor,
+                              shape: BoxShape.circle,
+                              border: isSel ? Border.all(color: Colors.black, width: 1.5) : null,
+                            ),
                             child: Text(
                               ["L", "M", "M", "J", "V", "S", "D"][index],
                               style: TextStyle(
-                                fontSize: 12, 
+                                fontSize: 13, 
                                 fontWeight: FontWeight.bold, 
                                 color: isSel ? Colors.black : Colors.grey
                               ),
@@ -328,6 +334,9 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                   ],
                 ),
               ),
+              
+              // --- ACTIONS ---
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -335,14 +344,15 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyan,
+                    backgroundColor: kNeonCyan,
                     foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {
                       int target = int.tryParse(targetController.text) ?? 1;
                       String unit = isTimerMode ? "min" : unitController.text.trim();
-
                       if (habitToEdit == null) {
                         context.read<HabitDatabase>().addHabit(
                               controller.text, selectedDays, selectedDifficulty, selectedCategory,
@@ -357,7 +367,7 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                       Navigator.pop(context);
                     }
                   },
-                  child: const Text("Créer"),
+                  child: const Text("Valider la Quête", style: TextStyle(fontWeight: FontWeight.bold)),
                 )
               ],
             );
@@ -366,7 +376,7 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
       },
     );
   }
-
+  
   Map<String, dynamic> _getCategoryDetails(HabitCategory category) {
     switch (category) {
       case HabitCategory.sport: return {'label': 'Sport', 'icon': Icons.fitness_center, 'color': Colors.orange};
