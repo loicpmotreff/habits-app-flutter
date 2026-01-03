@@ -811,8 +811,25 @@ class HabitTile extends StatelessWidget {
                   const SizedBox(height: 5),
                   Row(
                     children: [
+                      // --- REMPLACE LES LIGNES 814 et 815 PAR CECI ---
+                    
+                    if (habit.isFlexible) ...[
+                      // CAS FLEXIBLE : Icône de boucle + Progression (ex: 1/3)
+                      const Icon(Icons.sync_alt, size: 14, color: Colors.cyan),
+                      const SizedBox(width: 4),
+                      Builder(builder: (context) {
+                         // On calcule la progression de la semaine
+                         final progress = context.read<HabitDatabase>().getWeeklyProgress(habit);
+                         return Text(
+                           "$progress / ${habit.weeklyGoal} sem.",
+                           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                         );
+                      }),
+                    ] else ...[
+                      // CAS NORMAL : Flamme + Série
                       Icon(Icons.local_fire_department, size: 14, color: Colors.orange[400]),
                       Text(" ${habit.streak} j", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    ],
                       const SizedBox(width: 10),
                       if (habit.targetValue > 1)
                         Text(
