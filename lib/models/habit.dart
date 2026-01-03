@@ -37,7 +37,7 @@ class Habit extends HiveObject {
   int streak;
 
   @HiveField(5)
-  List<int> activeDays;
+  List<int> activeDays; // Utilisé si isFlexible == false
 
   @HiveField(6)
   List<DateTime> completedDays;
@@ -63,9 +63,16 @@ class Habit extends HiveObject {
   @HiveField(13, defaultValue: false)
   bool isNegative;
 
-  // --- NOUVEAU CHAMP : JOURS SAUTÉS (JOKERS) ---
   @HiveField(14, defaultValue: [])
   List<DateTime> skippedDays; 
+
+  // --- NOUVEAUX CHAMPS POUR LE MODE FLEXIBLE ---
+
+  @HiveField(15, defaultValue: false)
+  bool isFlexible; // Si True = on vise un nombre de fois/semaine. Si False = jours précis.
+
+  @HiveField(16, defaultValue: 1)
+  int weeklyGoal; // Ex: 3 fois par semaine
 
   Habit({
     required this.id,
@@ -82,6 +89,8 @@ class Habit extends HiveObject {
     this.unit = '',
     this.isTimer = false,
     this.isNegative = false,
-    this.skippedDays = const [], // Par défaut vide
+    this.skippedDays = const [],
+    this.isFlexible = false, // Valeur par défaut
+    this.weeklyGoal = 1,     // Valeur par défaut
   });
 }

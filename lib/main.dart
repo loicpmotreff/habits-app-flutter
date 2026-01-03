@@ -70,7 +70,6 @@ class MyApp extends StatelessWidget {
           onPrimary: Colors.black,
           secondary: kNeonCyan,
           surface: kCardNight,
-          background: kDeepNight,
           onSurface: Colors.white,
         ),
 
@@ -102,8 +101,8 @@ class MyApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: kCardNight,
           indicatorColor: kNeonCyan.withOpacity(0.2),
-          iconTheme: MaterialStateProperty.all(const IconThemeData(color: Colors.white)),
-          labelTextStyle: MaterialStateProperty.all(const TextStyle(color: kTextGrey, fontSize: 12)),
+          iconTheme: WidgetStateProperty.all(const IconThemeData(color: Colors.white)),
+          labelTextStyle: WidgetStateProperty.all(const TextStyle(color: kTextGrey, fontSize: 12)),
         ),
 
         appBarTheme: const AppBarTheme(
@@ -137,23 +136,46 @@ class _MainScreenState extends State<MainScreen> {
 
   // --- NOUVELLE INTERFACE COMPACTE (V3.0) ---
 void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
-    // --- INITIALISATION ---
+    // --- 1. INITIALISATION DES CONTROLEURS & VARIABLES ---
     final controller = TextEditingController(text: habitToEdit?.title ?? "");
+    
+    // Logique Chrono (Conversion en Min/Sec pour l'affichage)
+    int totalSeconds = (habitToEdit?.isTimer ?? false) ? (habitToEdit?.targetValue ?? 300) : 300;
+    // Si on édite une habitude qui n'était pas un timer, on met 5 min par défaut
+    if (!(habitToEdit?.isTimer ?? false) && habitToEdit != null) totalSeconds = 300;
+    
+    TextEditingController minController = TextEditingController(text: (totalSeconds ~/ 60).toString());
+    TextEditingController secController = TextEditingController(text: (totalSeconds % 60).toString());
+
+    // Logique Quantité Classique
     TextEditingController targetController = TextEditingController(text: (habitToEdit?.targetValue ?? 1).toString());
     TextEditingController unitController = TextEditingController(text: habitToEdit?.unit ?? "");
 
+    // Logique Fréquence & Jours
     List<int> selectedDays = habitToEdit != null ? List<int>.from(habitToEdit.activeDays) : [1, 2, 3, 4, 5, 6, 7];
+    
+    // --- NOUVEAUX CHAMPS FLEXIBLES ---
+    // (Note : Il faudra que 'habitToEdit' possède ces champs après ta mise à jour de Hive)
+    // Pour l'instant on met des valeurs par défaut si ça n'existe pas encore
+    bool isFrequencyFlexible = false; 
+    int frequencyGoal = 3; 
+    
+    // Si tu as déjà mis à jour habit.dart, tu pourras décommenter ça plus tard :
+    // isFrequencyFlexible = habitToEdit?.isFlexible ?? false;
+    // frequencyGoal = habitToEdit?.weeklyGoal ?? 3;
+
     bool isTimerMode = habitToEdit?.isTimer ?? false;
     bool isNegativeMode = habitToEdit?.isNegative ?? false;
     HabitCategory selectedCategory = habitToEdit?.category ?? HabitCategory.other;
     HabitDifficulty selectedDifficulty = HabitDifficulty.medium;
 
-    // --- THEME ---
+    // --- 2. THEME & STYLES ---
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final dialogColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final inputColor = isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade100;
-    final labelStyle = TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.bold);
+    final labelStyle = TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.bold);
+    final activeColor = Colors.cyan;
 
     showDialog(
       context: context,
@@ -163,11 +185,11 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
             return AlertDialog(
               backgroundColor: dialogColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              contentPadding: const EdgeInsets.all(24), // Plus d'espace autour
+              contentPadding: const EdgeInsets.all(24),
               
-              // --- TITRE DE LA FENÊTRE ---
+              // --- TITRE ---
               title: Text(
-                habitToEdit == null ? "Créer une Quête" : "Modifier la Quête",
+                habitToEdit == null ? "Créer une Quête" : "Modifier",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
               ),
@@ -175,27 +197,27 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start, // Tout aligner à gauche
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     
-                    // --- 1. IDENTITÉ ---
-                    Text("TITRE & CATÉGORIE", style: labelStyle),
+                    // --- SECTION 1 : IDENTITÉ ---
+                    Text("TITRE", style: labelStyle),
                     const SizedBox(height: 8),
                     TextField(
                       controller: controller,
-                      autofocus: false,
+                      autofocus: false, // Sécurité anti-crash clavier
                       style: const TextStyle(fontWeight: FontWeight.bold),
                       decoration: InputDecoration(
-                        hintText: "Ex: Lire 10 pages...",
-                        filled: true,
-                        fillColor: inputColor,
-                        prefixIcon: const Icon(Icons.edit_outlined),
+                        hintText: "Ex: Lire, Courir...",
+                        filled: true, fillColor: inputColor,
+                        prefixIcon: const Icon(Icons.edit_outlined, size: 20),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 10),
                       ),
                     ),
                     const SizedBox(height: 10),
                     
-                    // Menu déroulant (Dropdown)
+                    // Dropdown Catégorie
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
@@ -208,14 +230,14 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
                           items: HabitCategory.values.map((cat) {
                             final details = _getCategoryDetails(cat);
                             return DropdownMenuItem(
-                              value: cat,
+                              value: cat, 
                               child: Row(
                                 children: [
-                                  Icon(details['icon'], size: 18, color: details['color']),
-                                  const SizedBox(width: 10),
-                                  Text(details['label'], style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                                ],
-                              ),
+                                  Icon(details['icon'], size: 18, color: details['color']), 
+                                  const SizedBox(width: 10), 
+                                  Text(details['label'], style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14))
+                                ]
+                              )
                             );
                           }).toList(),
                           onChanged: (val) => setState(() => selectedCategory = val!),
@@ -225,150 +247,227 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
 
                     const SizedBox(height: 20),
 
-                    // --- 2. PARAMÈTRES (OPTIONS) ---
-                    Text("TYPE DE QUÊTE", style: labelStyle),
+                    // --- SECTION 2 : OPTIONS ---
+                    Text("TYPE", style: labelStyle),
                     const SizedBox(height: 8),
-                    
-                    // Option Négatif avec explication
                     Container(
                       decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
-                      child: SwitchListTile(
-                        title: const Text("Habitude Négative", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                        subtitle: Text("Cocher pour une mauvaise habitude à perdre (ex: Fumer)", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                        value: isNegativeMode,
-                        activeColor: Colors.redAccent,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        onChanged: (val) => setState(() { isNegativeMode = val; if(val) isTimerMode = false; }),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Option Chrono avec explication
-                    Container(
-                      decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(12)),
-                      child: SwitchListTile(
-                        title: const Text("Mode Chronomètre", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                        subtitle: Text("Utiliser un compte à rebours au lieu d'une quantité", style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                        value: isTimerMode,
-                        activeColor: kNeonCyan,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                        onChanged: (val) => setState(() => isTimerMode = val),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text("Mauvaise habitude", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            value: isNegativeMode,
+                            activeColor: Colors.redAccent,
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                            onChanged: (val) => setState(() { isNegativeMode = val; if(val) isTimerMode = false; }),
+                          ),
+                          Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                          SwitchListTile(
+                            title: const Text("Chronomètre", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            value: isTimerMode,
+                            activeColor: activeColor,
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                            onChanged: (val) => setState(() { isTimerMode = val; if(val) isNegativeMode = false; }),
+                          ),
+                        ],
                       ),
                     ),
 
-                    // --- 3. OBJECTIF (Seulement si positif) ---
-                    if (!isNegativeMode) ...[
-                      const SizedBox(height: 20),
-                      Text("OBJECTIF JOURNALIER", style: labelStyle),
+                    const SizedBox(height: 20),
+
+                    // --- SECTION 3 : OBJECTIF ---
+                    if (isTimerMode) ...[
+                      // Mode Timer (Min : Sec)
+                      Text("DURÉE", style: labelStyle),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Expanded(
-                            flex: 1,
-                            child: TextField(
-                              controller: targetController,
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                              decoration: InputDecoration(
-                                labelText: isTimerMode ? "Min" : "Qté",
-                                filled: true,
-                                fillColor: inputColor,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                            ),
-                          ),
+                          Expanded(child: TextField(controller: minController, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.cyan), decoration: InputDecoration(labelText: "Min", filled: true, fillColor: inputColor, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
+                          const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text(":", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.grey))),
+                          Expanded(child: TextField(controller: secController, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.cyan), decoration: InputDecoration(labelText: "Sec", filled: true, fillColor: inputColor, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
+                        ],
+                      ),
+                    ] else if (!isNegativeMode) ...[
+                      // Mode Quantité
+                      Text("OBJECTIF", style: labelStyle),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(flex: 1, child: TextField(controller: targetController, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), decoration: InputDecoration(labelText: "Qté", filled: true, fillColor: inputColor, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
                           const SizedBox(width: 10),
-                          Expanded(
-                            flex: 2,
-                            child: TextField(
-                              controller: unitController,
-                              enabled: !isTimerMode,
-                              decoration: InputDecoration(
-                                labelText: "Unité",
-                                hintText: isTimerMode ? "minutes" : "ex: pages, verres...",
-                                filled: true,
-                                fillColor: inputColor,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                            ),
-                          ),
+                          Expanded(flex: 2, child: TextField(controller: unitController, decoration: InputDecoration(labelText: "Unité (ex: km)", filled: true, fillColor: inputColor, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
                         ],
                       ),
                     ],
 
                     const SizedBox(height: 20),
 
-                    // --- 4. FRÉQUENCE ---
-                    Text("RÉCURRENCE", style: labelStyle),
-                    const SizedBox(height: 10),
+                    // --- SECTION 4 : FRÉQUENCE ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(7, (index) {
-                        int dayId = index + 1;
-                        bool isSel = selectedDays.contains(dayId);
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId);
-                          }),
-                          child: Container(
-                            width: 35, height: 35, // Un peu plus grand pour le doigt
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isSel ? kNeonCyan : inputColor,
-                              shape: BoxShape.circle,
-                              border: isSel ? Border.all(color: Colors.black, width: 1.5) : null,
+                      children: [
+                        Text("FRÉQUENCE", style: labelStyle),
+                        // Switch Jours / Flexible
+                        Container(
+                          height: 30,
+                          decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(8)),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () => setState(() => isFrequencyFlexible = false),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: !isFrequencyFlexible ? activeColor : null, borderRadius: BorderRadius.circular(8)),
+                                  child: Text("Jours", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: !isFrequencyFlexible ? Colors.black : Colors.grey)),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () => setState(() => isFrequencyFlexible = true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(color: isFrequencyFlexible ? activeColor : null, borderRadius: BorderRadius.circular(8)),
+                                  child: Text("Flexible", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isFrequencyFlexible ? Colors.black : Colors.grey)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+
+                    // Contenu dynamique Fréquence
+                    if (!isFrequencyFlexible) 
+                      // --- CAS 1 : JOURS FIXES ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(7, (index) {
+                          int dayId = index + 1;
+                          bool isSel = selectedDays.contains(dayId);
+                          return GestureDetector(
+                            onTap: () => setState(() {
+                              isSel ? (selectedDays.length > 1 ? selectedDays.remove(dayId) : null) : selectedDays.add(dayId);
+                            }),
+                            child: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isSel ? activeColor : inputColor,
+                              child: Text(["L", "M", "M", "J", "V", "S", "D"][index], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isSel ? Colors.black : Colors.grey)),
                             ),
-                            child: Text(
-                              ["L", "M", "M", "J", "V", "S", "D"][index],
-                              style: TextStyle(
-                                fontSize: 13, 
-                                fontWeight: FontWeight.bold, 
-                                color: isSel ? Colors.black : Colors.grey
+                          );
+                        }),
+                      )
+                    else 
+                      // --- CAS 2 : MODE FLEXIBLE (CORRIGÉ AVEC EXPANDED) ---
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(color: inputColor, borderRadius: BorderRadius.circular(16)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Texte flexible qui prend la place dispo sans pousser
+                            const Expanded(
+                              child: Text(
+                                "Objectif / semaine :", 
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                        );
-                      }),
-                    ),
+                            // Boutons Compteurs Compacts
+                            Row(
+                              children: [
+                                IconButton(
+                                  onPressed: () => setState(() { if(frequencyGoal > 1) frequencyGoal--; }), 
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  color: Colors.grey,
+                                  constraints: const BoxConstraints(), // Réduit la taille du bouton
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                                Container(
+                                  width: 30,
+                                  alignment: Alignment.center,
+                                  child: Text("$frequencyGoal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: activeColor)),
+                                ),
+                                IconButton(
+                                  onPressed: () => setState(() { if(frequencyGoal < 7) frequencyGoal++; }), 
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  color: activeColor,
+                                  constraints: const BoxConstraints(),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                ),
+                              ],
+                            )
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
               
               // --- ACTIONS ---
-              actionsPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kNeonCyan,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    if (controller.text.isNotEmpty) {
-                      int target = int.tryParse(targetController.text) ?? 1;
-                      String unit = isTimerMode ? "min" : unitController.text.trim();
-                      if (habitToEdit == null) {
-                        context.read<HabitDatabase>().addHabit(
-                              controller.text, selectedDays, selectedDifficulty, selectedCategory,
-                              target, unit, isTimerMode, isNegativeMode
-                            );
-                      } else {
-                        context.read<HabitDatabase>().updateHabit(
-                              habitToEdit.id, controller.text, selectedDays, selectedDifficulty, selectedCategory,
-                              target, unit, isTimerMode, isNegativeMode
-                            );
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
+              ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: activeColor, 
+                      foregroundColor: Colors.black, 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                    ),
+                    onPressed: () {
+                      if (controller.text.isNotEmpty) {
+                        // --- CALCULS PRÉLIMINAIRES ---
+                        int target;
+                        String unit;
+                        
+                        // Calcul Target (Chrono ou Qté)
+                        if (isTimerMode) {
+                          int m = int.tryParse(minController.text) ?? 0;
+                          int s = int.tryParse(secController.text) ?? 0;
+                          target = (m * 60) + s;
+                          if (target == 0) target = 60; 
+                          unit = "sec";
+                        } else {
+                          target = int.tryParse(targetController.text) ?? 1;
+                          unit = unitController.text.trim();
+                        }
+
+                        // --- APPEL A LA BASE DE DONNÉES CORRIGÉ ---
+                        // On passe maintenant les variables isFrequencyFlexible et frequencyGoal
+                        
+                        if (habitToEdit == null) {
+                          context.read<HabitDatabase>().addHabit(
+                            controller.text, 
+                            selectedDays, 
+                            selectedDifficulty, 
+                            selectedCategory, 
+                            target, 
+                            unit, 
+                            isTimerMode, 
+                            isNegativeMode,
+                            isFrequencyFlexible, // ✅ Ajouté (correspond à isFlexible)
+                            frequencyGoal        // ✅ Ajouté (correspond à weeklyGoal)
+                          );
+                        } else {
+                          context.read<HabitDatabase>().updateHabit(
+                            habitToEdit.id, 
+                            controller.text, 
+                            selectedDays, 
+                            selectedDifficulty, 
+                            selectedCategory, 
+                            target, 
+                            unit, 
+                            isTimerMode, 
+                            isNegativeMode,
+                            isFrequencyFlexible, // ✅ Ajouté
+                            frequencyGoal        // ✅ Ajouté
+                          );
+                        }
+                        Navigator.pop(context);
                       }
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text("Valider la Quête", style: TextStyle(fontWeight: FontWeight.bold)),
-                )
+                    },
+                    child: const Text("Valider", style: TextStyle(fontWeight: FontWeight.bold)),
+                  )
               ],
             );
           },
@@ -376,7 +475,7 @@ void _showHabitDialog(BuildContext context, {Habit? habitToEdit}) {
       },
     );
   }
-  
+
   Map<String, dynamic> _getCategoryDetails(HabitCategory category) {
     switch (category) {
       case HabitCategory.sport: return {'label': 'Sport', 'icon': Icons.fitness_center, 'color': Colors.orange};

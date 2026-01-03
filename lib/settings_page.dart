@@ -39,7 +39,7 @@ class SettingsPage extends StatelessWidget {
                       secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: theme.colorScheme.primary),
                       title: const Text("Mode Sombre"),
                       value: db.isDarkMode,
-                      activeColor: theme.colorScheme.primary,
+                      activeThumbColor: theme.colorScheme.primary,
                       onChanged: (val) => db.toggleTheme(),
                     ),
                   ],

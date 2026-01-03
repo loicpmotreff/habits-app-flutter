@@ -36,13 +36,15 @@ class HabitAdapter extends TypeAdapter<Habit> {
       isNegative: fields[13] == null ? false : fields[13] as bool,
       skippedDays:
           fields[14] == null ? [] : (fields[14] as List).cast<DateTime>(),
+      isFlexible: fields[15] == null ? false : fields[15] as bool,
+      weeklyGoal: fields[16] == null ? 1 : fields[16] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, Habit obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -72,7 +74,11 @@ class HabitAdapter extends TypeAdapter<Habit> {
       ..writeByte(13)
       ..write(obj.isNegative)
       ..writeByte(14)
-      ..write(obj.skippedDays);
+      ..write(obj.skippedDays)
+      ..writeByte(15)
+      ..write(obj.isFlexible)
+      ..writeByte(16)
+      ..write(obj.weeklyGoal);
   }
 
   @override

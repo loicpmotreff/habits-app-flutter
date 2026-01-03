@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
-import 'models/habit.dart';
-import 'database/habit_database.dart';
-import 'sound_manager.dart';
+import '../models/habit.dart'; 
+import '../database/habit_database.dart'; 
+import '../sound_manager.dart'; 
 
 class HabitDetailsPage extends StatefulWidget {
   final Habit habit;
@@ -35,7 +35,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
     // 2. Les jours Joker (Gris = 2)
     for (var date in widget.habit.skippedDays) {
       final normalizedDate = DateTime(date.year, date.month, date.day);
-      dataset[normalizedDate] = 2; // Intensité différente pour couleur différente
+      dataset[normalizedDate] = 2; 
     }
     
     return dataset;
@@ -51,10 +51,13 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
     // Détection du mode sombre
     bool isDark = Theme.of(context).brightness == Brightness.dark;
     Color textColor = isDark ? Colors.white : Colors.black;
-    Color cardColor = Theme.of(context).cardTheme.color ?? Colors.white;
+    Color cardColor = Theme.of(context).cardTheme.color ?? (isDark ? const Color(0xFF1E1E1E) : Colors.white);
 
     // Vérifier si Joker activé aujourd'hui
     bool isSkippedToday = widget.db.isHabitSkippedToday(widget.habit);
+
+    // Calcul de la progression hebdo (pour les flexibles)
+    int weeklyProgress = widget.db.getWeeklyProgress(widget.habit);
 
     Color habitColor;
     switch (widget.habit.category) {
@@ -68,17 +71,16 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
     if (widget.habit.isNegative) habitColor = Colors.red;
 
     return Scaffold(
-      // Plus de couleur de fond en dur, on laisse le Thème gérer
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor), // Icône adaptative
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit, color: textColor), // Icône adaptative
+            icon: Icon(Icons.edit, color: textColor),
             onPressed: () {
               Navigator.pop(context);
               widget.onEdit();
@@ -118,7 +120,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                         fontSize: 24, 
                         fontWeight: FontWeight.bold,
                         decoration: isSkippedToday ? TextDecoration.lineThrough : null,
-                        color: isSkippedToday ? Colors.grey : textColor // Texte adaptatif
+                        color: isSkippedToday ? Colors.grey : textColor
                       ),
                     ),
                   ),
@@ -132,7 +134,6 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
-                  // Couleur adaptative pour le fond du Joker
                   color: isSkippedToday 
                       ? (isDark ? Colors.grey[800] : Colors.grey[300]) 
                       : (isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50),
@@ -158,7 +159,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                     ),
                     Switch(
                       value: isSkippedToday,
-                      activeColor: Colors.grey[400],
+                      activeThumbColor: Colors.grey[400],
                       onChanged: (val) {
                         setState(() {
                            widget.db.toggleSkipHabit(widget.habit);
@@ -174,9 +175,36 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
               // 3. LES STATS
               Row(
                 children: [
-                  _buildStatCard("Série Actuelle", "${widget.habit.streak} j", Icons.local_fire_department, Colors.orange, cardColor, textColor),
+                  // Carte de gauche : Série OU Hebdo
+                  widget.habit.isFlexible 
+                  ? _buildStatCard(
+                      "Cette semaine", 
+                      "$weeklyProgress / ${widget.habit.weeklyGoal}", 
+                      Icons.calendar_view_week_rounded, 
+                      Colors.cyan, 
+                      cardColor, 
+                      textColor
+                    )
+                  : _buildStatCard(
+                      "Série Actuelle", 
+                      "${widget.habit.streak} j", 
+                      Icons.local_fire_department, 
+                      Colors.orange, 
+                      cardColor, 
+                      textColor
+                    ),
+                  
                   const SizedBox(width: 10),
-                  _buildStatCard("Total Validé", _calculateSuccessRate(), Icons.emoji_events, Colors.amber, cardColor, textColor),
+                  
+                  // Carte de droite : Total
+                  _buildStatCard(
+                    "Total Validé", 
+                    _calculateSuccessRate(), 
+                    Icons.emoji_events, 
+                    Colors.amber, 
+                    cardColor, 
+                    textColor
+                  ),
                 ],
               ),
 
@@ -189,7 +217,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: cardColor, // Fond adaptatif (Noir/Blanc)
+                  color: cardColor,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
                 ),
@@ -197,14 +225,14 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                   child: HeatMapCalendar(
                     datasets: _prepareHeatmapDataset(),
                     colorMode: ColorMode.color,
-                    defaultColor: isDark ? Colors.grey[800] : Colors.grey[200], // Cases vides adaptatives
-                    textColor: textColor, // Texte des jours (Lun, Mar...) adaptatif
+                    defaultColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                    textColor: textColor,
                     showColorTip: false,
-                    size: 28, // Taille des carrés
+                    size: 28,
                     margin: const EdgeInsets.all(4),
                     colorsets: {
-                      1: habitColor,        // Couleur Validé
-                      2: Colors.grey,       // Couleur Joker
+                      1: habitColor,
+                      2: Colors.grey,
                     },
                     onClick: (value) {},
                   ),
@@ -213,7 +241,7 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
 
               const SizedBox(height: 40),
 
-              // 5. BOUTON SUPPRIMER
+              // 5. BOUTON SUPPRIMER (CORRIGÉ ICI 👇)
               Center(
                 child: TextButton.icon(
                   onPressed: () {
@@ -226,10 +254,13 @@ class _HabitDetailsPageState extends State<HabitDetailsPage> {
                           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
                           TextButton(
                             onPressed: () {
+                              // 1. ON FERME D'ABORD LES PAGES
+                              Navigator.pop(context); // Ferme l'alerte
+                              Navigator.pop(context); // Ferme la page de détails
+                              
+                              // 2. ENSUITE ON SUPPRIME
                               widget.db.deleteHabit(widget.habit);
-                              Navigator.pop(context);
-                              Navigator.pop(context);
-                              SoundManager.play('error.mp3');
+                              //SoundManager.play('error.mp3');
                             },
                             child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
                           ),

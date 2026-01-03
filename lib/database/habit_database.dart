@@ -15,7 +15,7 @@ class HabitDatabase extends ChangeNotifier {
   String itemActive = 'default';
   bool isDarkMode = false;
   
-  // --- NOUVEAU : BADGES ---
+  // --- BADGES ---
   List<String> unlockedBadgeIds = []; // Liste des IDs débloqués
 
   // LISTE DES BADGES POSSIBLES
@@ -64,7 +64,7 @@ class HabitDatabase extends ChangeNotifier {
     notifyListeners();
   }
 
-  void loadHabits() {
+void loadHabits() {
     final box = Hive.box<Habit>(boxName);
     final allHabits = box.values.toList();
     final now = DateTime.now();
@@ -80,10 +80,11 @@ class HabitDatabase extends ChangeNotifier {
            bool wasSkippedYesterday = habit.skippedDays.any((d) => 
              d.year == yesterday.year && d.month == yesterday.month && d.day == yesterday.day
            );
+           
            bool wasCompletedYesterday = lastDate.year == yesterday.year && lastDate.month == yesterday.month && lastDate.day == yesterday.day;
 
            if (!wasCompletedYesterday && !wasSkippedYesterday) {
-              habit.streak = 0;
+             habit.streak = 0;
            }
 
            if (habit.isNegative) {
@@ -97,10 +98,18 @@ class HabitDatabase extends ChangeNotifier {
         }
       }
     }
-    habits = allHabits.where((habit) => habit.activeDays.contains(now.weekday)).toList();
-    notifyListeners();
-  }
 
+    // --- C'EST ICI QUE CA CHANGE POUR LE FLEXIBLE ---
+    habits = allHabits.where((habit) {
+        // Si c'est Flexible, on l'affiche TOUJOURS (ou selon ta logique préférée)
+        if (habit.isFlexible) return true; 
+        
+        // Sinon (Jours fixes), on vérifie si on est le bon jour (Lundi, Mardi...)
+        return habit.activeDays.contains(now.weekday);
+    }).toList();
+    
+    notifyListeners();
+  } 
   bool isHabitSkippedToday(Habit habit) {
     final now = DateTime.now();
     return habit.skippedDays.any((d) => 
@@ -154,7 +163,7 @@ class HabitDatabase extends ChangeNotifier {
 
     // 1. Calculer le total des validations (toutes habitudes confondues)
     int totalCompletions = 0;
-    final box = Hive.box<Habit>(boxName); // On prend toutes les habitudes, même archivées si besoin
+    final box = Hive.box<Habit>(boxName); 
     for (var h in box.values) {
       totalCompletions += h.completedDays.length;
     }
@@ -188,7 +197,6 @@ class HabitDatabase extends ChangeNotifier {
     }
 
     // Joker
-    // On vérifie si N'IMPORTE QUELLE habitude a un jour skippé
     bool hasUsedJoker = box.values.any((h) => h.skippedDays.isNotEmpty);
     if (!unlockedBadgeIds.contains('joker_use') && hasUsedJoker) {
       unlockedBadgeIds.add('joker_use');
@@ -196,7 +204,6 @@ class HabitDatabase extends ChangeNotifier {
     }
 
     // Streaks (Séries)
-    // On cherche la MEILLEURE série parmi toutes les habitudes
     int bestStreak = 0;
     for (var h in box.values) {
       if (h.streak > bestStreak) bestStreak = h.streak;
@@ -218,13 +225,24 @@ class HabitDatabase extends ChangeNotifier {
     if (newUnlock) {
       updateSettings();
       notifyListeners();
-      // On pourrait déclencher un son spécial ou une notif ici
       SoundManager.play('success.mp3'); 
     }
   }
   // ------------------------------------------
 
-  void addHabit(String title, List<int> days, HabitDifficulty difficulty, HabitCategory category, int targetValue, String unit, bool isTimer, bool isNegative) {
+  // --- MODIFICATION ICI : Ajout de isFlexible et weeklyGoal ---
+  void addHabit(
+      String title, 
+      List<int> days, 
+      HabitDifficulty difficulty, 
+      HabitCategory category, 
+      int targetValue, 
+      String unit, 
+      bool isTimer, 
+      bool isNegative, 
+      bool isFlexible, 
+      int weeklyGoal
+    ) {
     bool startCompleted = isNegative; 
     final newHabit = Habit(
       id: DateTime.now().toString(),
@@ -239,6 +257,8 @@ class HabitDatabase extends ChangeNotifier {
       unit: unit,
       isTimer: isTimer,
       isNegative: isNegative,
+      isFlexible: isFlexible, // Nouveau champ
+      weeklyGoal: weeklyGoal, // Nouveau champ
       isCompletedToday: startCompleted, 
       lastCompletedDate: DateTime.now(),
       skippedDays: [],
@@ -248,7 +268,20 @@ class HabitDatabase extends ChangeNotifier {
     loadHabits();
   }
 
-  void updateHabit(String id, String newTitle, List<int> newDays, HabitDifficulty newDifficulty, HabitCategory newCategory, int newTargetValue, String newUnit, bool isTimer, bool isNegative) {
+  // --- MODIFICATION ICI : Ajout de isFlexible et weeklyGoal ---
+  void updateHabit(
+      String id, 
+      String newTitle, 
+      List<int> newDays, 
+      HabitDifficulty newDifficulty, 
+      HabitCategory newCategory, 
+      int newTargetValue, 
+      String newUnit, 
+      bool isTimer, 
+      bool isNegative, 
+      bool isFlexible, 
+      int weeklyGoal
+    ) {
     final habitIndex = habits.indexWhere((h) => h.id == id);
     if (habitIndex != -1) {
       final habit = habits[habitIndex];
@@ -260,6 +293,8 @@ class HabitDatabase extends ChangeNotifier {
       habit.unit = newUnit;
       habit.isTimer = isTimer;
       habit.isNegative = isNegative;
+      habit.isFlexible = isFlexible; // Mise à jour
+      habit.weeklyGoal = weeklyGoal; // Mise à jour
       habit.save();
       loadHabits();
     }
@@ -354,13 +389,31 @@ class HabitDatabase extends ChangeNotifier {
     box.put('inventory', inventory);
     box.put('itemActive', itemActive);
     box.put('isDarkMode', isDarkMode);
-    box.put('badges', unlockedBadgeIds); // <--- Sauvegarde des badges
+    box.put('badges', unlockedBadgeIds);
   }
 
   void deleteHabit(Habit habit) {
     habit.delete();
     loadHabits();
   }
+
+  // Calcule combien de fois une habitude a été faite cette semaine (Lundi -> Dimanche)
+  int getWeeklyProgress(Habit habit) {
+    final now = DateTime.now();
+    // On trouve le Lundi de la semaine actuelle à 00:00:00
+    // now.weekday : 1 = Lundi, 7 = Dimanche
+    final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+
+    int count = 0;
+    for (var date in habit.completedDays) {
+      // On compare si la date est après ou égale au début de la semaine
+      if (date.isAfter(startOfWeek) || date.isAtSameMomentAs(startOfWeek)) {
+        count++;
+      }
+    }
+    return count;
+  }
+  
 }
 
 // --- CLASSE SIMPLE POUR LES BADGES ---
@@ -379,3 +432,4 @@ class AppBadge {
     required this.color
   });
 }
+
